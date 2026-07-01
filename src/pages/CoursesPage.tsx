@@ -1,94 +1,144 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Filter, BookOpen } from 'lucide-react';
+import { BookOpen, Filter, Search, PlayCircle, Users } from 'lucide-react';
 import { useApp } from '../store/AppContext';
-import { EmptyState } from '../components/ui';
 
 export function CoursesPage() {
-  const { courses } = useApp();
-  const [stage, setStage] = useState<'all' | 'primary' | 'preparatory'>('all');
+  // استخدام قيمة افتراضية لحماية الصفحة لو الداتا لسه بتيجي
+  const { courses } = useApp() || { courses: [] };
+  const [filter, setFilter] = useState<'all' | 'primary' | 'preparatory' | 'secondary'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const filtered =
-    stage === 'all' ? courses : courses.filter((c) => c.stage === stage);
+  // حماية كاملة هنا: التأكد إن الكورسات عبارة عن مصفوفة سليمة
+  const safeCourses = Array.isArray(courses) ? courses : [];
+
+  // فلترة الكورسات مع حماية ضد الـ (Undefined)
+  const filteredCourses = safeCourses.filter((course) => {
+    if (!course) return false; // لو الكورس بايظ تجاهله
+
+    const matchStage = filter === 'all' || course.stage === filter;
+
+    // تأمين النصوص قبل البحث عشان نمنع الشاشة البيضاء
+    const safeTitle = course.title || '';
+    const safeSubject = course.subject || '';
+
+    const matchSearch = safeTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      safeSubject.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchStage && matchSearch;
+  });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12">
-      <div className="mb-8">
-        <h1 className="section-title">الكورسات</h1>
-        <p className="mt-2 text-ink-500 dark:text-ink-400">
-          اختر الكورس المناسب لمرحلتك الدراسية
-        </p>
+    <div className="mx-auto max-w-7xl px-4 py-12 animate-fade-in">
+      {/* عنوان الصفحة */}
+      <div className="mb-10 text-center">
+        <h1 className="font-display text-4xl font-black text-ink-900 dark:text-white">الكورسات</h1>
+        <p className="mt-2 text-ink-500 dark:text-ink-400">اختر الكورس المناسب لمرحلتك الدراسية</p>
       </div>
 
-      <div className="mb-8 flex items-center gap-2">
-        <Filter className="h-4 w-4 text-ink-400" />
-        <div className="flex gap-2">
+      {/* الفلاتر والبحث */}
+      <div className="mb-8 flex flex-col-reverse items-center justify-between gap-4 md:flex-row">
+
+        {/* مربع البحث */}
+        <div className="relative w-full md:w-96">
+          <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
+          <input
+            type="text"
+            placeholder="ابحث عن كورس أو مادة..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input-field w-full py-3 pr-12"
+          />
+        </div>
+
+        {/* أزرار الفلترة (شاملة الثانوي) */}
+        <div className="flex w-full items-center justify-end gap-2 overflow-x-auto pb-2 md:w-auto md:pb-0" dir="rtl">
+          <Filter className="ml-2 h-5 w-5 shrink-0 text-ink-400" />
+
           {[
-            { key: 'all', label: 'الكل' },
-            { key: 'primary', label: 'ابتدائي' },
-            { key: 'preparatory', label: 'إعدادي' },
-          ].map((f) => (
+            { id: 'all', label: 'الكل' },
+            { id: 'primary', label: 'ابتدائي' },
+            { id: 'preparatory', label: 'إعدادي' },
+            { id: 'secondary', label: 'ثانوي' }
+          ].map((stage) => (
             <button
-              key={f.key}
-              onClick={() => setStage(f.key as typeof stage)}
-              className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
-                stage === f.key
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300 dark:hover:bg-ink-700'
-              }`}
+              key={stage.id}
+              onClick={() => setFilter(stage.id as any)}
+              className={`shrink-0 rounded-full px-6 py-2.5 text-sm font-bold transition-all ${filter === stage.id
+                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
+                  : 'bg-white text-ink-600 hover:bg-ink-50 dark:bg-[#171a36] dark:text-ink-300 dark:hover:bg-white/5'
+                }`}
             >
-              {f.label}
+              {stage.label}
             </button>
           ))}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={<BookOpen className="h-8 w-8" />}
-          title="لا توجد كورسات"
-          description="لم تُضف كورسات في هذه المرحلة بعد."
-        />
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((course) => (
+      {/* شبكة الكورسات */}
+      {filteredCourses.length > 0 ? (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredCourses.map((course) => (
             <Link
               key={course.id}
-              to={`/courses/${course.id}`}
-              className="card group overflow-hidden p-0 transition-all hover:-translate-y-1 hover:shadow-glow"
+              to={`/courses/${course.id || ''}`}
+              className="group flex flex-col overflow-hidden rounded-[2rem] border border-ink-200 bg-white transition-all hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#171a36]"
             >
-              <div className="relative aspect-video overflow-hidden">
+              <div className="relative aspect-[4/3] overflow-hidden bg-ink-100 dark:bg-ink-800">
                 <img
-                  src={course.coverImage}
-                  alt={course.title}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  src={course.coverImage || course.imageUrl || 'https://via.placeholder.com/400x300'}
+                  alt={course.title || 'كورس'}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-ink-950/70 to-transparent" />
-                <span className="absolute right-3 top-3 badge bg-white/90 text-ink-800 backdrop-blur">
-                  {course.stage === 'primary' ? 'ابتدائي' : 'إعدادي'}
-                </span>
-                <div className="absolute bottom-3 right-3 left-3">
-                  <p className="text-xs font-bold text-white/80">{course.grade}</p>
-                  <h3 className="line-clamp-1 text-base font-900 text-white">
-                    {course.title}
-                  </h3>
+                <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                  <span className="flex items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-bold text-white backdrop-blur-md">
+                    <PlayCircle className="h-5 w-5" />
+                    عرض التفاصيل
+                  </span>
                 </div>
               </div>
-              <div className="p-5">
-                <p className="line-clamp-2 text-sm leading-relaxed text-ink-500 dark:text-ink-400">
-                  {course.description}
-                </p>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="font-display text-xl font-900 text-brand-600 dark:text-brand-400">
-                    {course.price} ج.م
-                  </span>
-                  <span className="text-xs font-bold text-ink-400">
-                    {course.lessons.length} درس
+
+              <div className="flex flex-1 flex-col p-6">
+                <div className="mb-3 flex items-center justify-between">
+                  {/* إخفاء البادج لو المادة مش مكتوبة */}
+                  {course.subject && (
+                    <span className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-bold text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">
+                      {course.subject}
+                    </span>
+                  )}
+                  {/* إخفاء الصف لو مش مكتوب */}
+                  {course.grade && (
+                    <span className="text-xs font-bold text-ink-500 dark:text-ink-400">
+                      {course.grade}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="mb-2 text-lg font-black leading-tight text-ink-900 line-clamp-2 dark:text-white">
+                  {course.title}
+                </h3>
+
+                <div className="mt-auto pt-4 flex items-center justify-between border-t border-ink-100 dark:border-white/10">
+                  <div className="flex items-center gap-2 text-sm font-bold text-ink-600 dark:text-ink-300">
+                    <Users className="h-4 w-4 text-ink-400" />
+                    {course.instructor}
+                  </div>
+                  <span className="text-lg font-black text-brand-600 dark:text-brand-400">
+                    {Number(course.price) === 0 ? 'مجانياً' : `${course.price} ج.م`}
                   </span>
                 </div>
               </div>
             </Link>
           ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-ink-200 bg-white/50 py-20 text-center dark:border-white/5 dark:bg-[#171a36]/50">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-ink-50 dark:bg-ink-900/50">
+            <BookOpen className="h-10 w-10 text-ink-400" />
+          </div>
+          <h3 className="mb-2 text-xl font-black text-ink-900 dark:text-white">لا توجد كورسات</h3>
+          <p className="text-ink-500 dark:text-ink-400">لم تُضف كورسات في هذا القسم بعد.</p>
         </div>
       )}
     </div>

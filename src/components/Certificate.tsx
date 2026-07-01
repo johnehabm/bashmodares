@@ -16,7 +16,7 @@ export function Certificate({ studentName, courseTitle, onClose }: CertificatePr
 
         try {
             const dataUrl = await htmlToImage.toPng(certificateRef.current, {
-                pixelRatio: 4,
+                pixelRatio: 4, // يضمن جودة عالية جداً حتى لو تم التحميل من موبايل شاشته صغيرة
                 cacheBust: true,
                 backgroundColor: "#ffffff",
             });
@@ -63,27 +63,26 @@ export function Certificate({ studentName, courseTitle, onClose }: CertificatePr
                     />
 
                     {/* طبقة النصوص التي ستظهر فوق التصميم */}
-                    {/* يمكنك تعديل (mt-...) أو (mb-...) لضبط المسافات حسب تصميمك */}
                     <div className="relative z-10 flex h-full w-full flex-col items-center justify-center pt-0">
 
-                        {/* اسم الطالب */}
-                        <h2 className="mt-8 text-4xl font-black text-ink-900 md:text-5xl print:text-black">
+                        {/* اسم الطالب (أحجام متجاوبة تصغر مع الموبايل) */}
+                        <h2 className="mt-[4%] text-2xl sm:text-3xl md:text-5xl font-black text-ink-900 print:text-black">
                             {studentName}
                         </h2>
 
-                        {/* مسافة بين الاسم والكورس */}
-                        <div className="mt-11"></div>
+                        {/* مسافة بين الاسم والكورس (باستخدام النسب المئوية للحفاظ على التناسق) */}
+                        <div className="mt-[8%] md:mt-[5.5%]"></div>
 
-                        {/* اسم الكورس */}
-                        <h3 className="text-3xl font-bold text-brand-600 md:text-2xl print:text-black">
+                        {/* اسم الكورس (أحجام متجاوبة) */}
+                        <h3 className="text-lg sm:text-2xl md:text-3xl font-bold text-brand-600 print:text-black">
                             {courseTitle}
                         </h3>
 
                     </div>
 
-                    {/* التاريخ (تم وضعه أسفل اليسار، يمكنك تغيير مكانه) */}
-                    <div className="absolute bottom-12 left-24 z-10">
-                        <p className="text-xl font-bold text-ink-800 print:text-black">
+                    {/* التاريخ (تم استخدام النسب المئوية بدلاً من bottom-12 left-24 ليظل في مكانه بدقة على الموبايل) */}
+                    <div className="absolute bottom-[12%] left-[15%] z-10">
+                        <p className="text-xs sm:text-lg md:text-xl font-bold text-ink-800 print:text-black">
                             {new Date().toLocaleDateString('ar-EG')}
                         </p>
                     </div>

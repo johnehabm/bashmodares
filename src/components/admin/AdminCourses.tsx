@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import {
   BookOpen, DollarSign, GraduationCap, Users, Image as ImageIcon, FileText,
-  PlusCircle, Trash2, Video, Link as LinkIcon, Brain, Plus, Upload, Save, XCircle, PlayCircle,
-  Target
+  PlusCircle, Trash2, Video, Link as LinkIcon, Brain, Plus, Upload, Save, XCircle, PlayCircle, Target
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { supabase } from '../../lib/supabase';
@@ -190,8 +189,9 @@ export function AdminCourses() {
                 </div>
               </div>
 
+              {/* نموذج إضافة محتوى الكورس */}
               {addingLessonTo === course.id && (
-                <div className="border-b border-ink-100 bg-brand-50/50 p-6 dark:border-white/5 dark:bg-brand-900/10">
+                <div className="border-b border-ink-100 bg-brand-50/30 p-6 dark:border-white/5 dark:bg-brand-900/10">
                   <div className="mb-4 flex items-center gap-2 text-brand-700 dark:text-brand-300">
                     <Video className="h-5 w-5" />
                     <h4 className="font-bold">إضافة محتوى لـ ({course.title})</h4>
@@ -211,47 +211,56 @@ export function AdminCourses() {
                           <option value="quiz">اختبار (Quiz)</option>
                         </select>
                       </div>
-
-                      {newLesson.type !== 'quiz' && (
-                        <div className="space-y-1.5 md:col-span-2">
-                          <label className="flex items-center gap-1 text-xs font-bold text-ink-600 dark:text-ink-300"><LinkIcon className="h-3 w-3" /> رابط الفيديو / الملف</label>
-                          <input required type="url" placeholder="Youtube / Drive Link" className="input-field w-full" value={newLesson.videoUrl} onChange={e => setNewLesson({ ...newLesson, videoUrl: e.target.value })} />
-                        </div>
-                      )}
                     </div>
+
+                    {newLesson.type !== 'quiz' && (
+                      <div className="mt-4 space-y-1.5">
+                        <label className="flex items-center gap-1 text-xs font-bold text-ink-600 dark:text-ink-300"><LinkIcon className="h-3 w-3" /> رابط الفيديو / الملف</label>
+                        <input required type="url" placeholder="Youtube / Drive Link" className="input-field w-full" value={newLesson.videoUrl} onChange={e => setNewLesson({ ...newLesson, videoUrl: e.target.value })} />
+                      </div>
+                    )}
 
                     {newLesson.type === 'quiz' && (
                       <div className="mt-6 rounded-2xl border border-brand-200 bg-white p-5 shadow-sm dark:border-brand-900/50 dark:bg-ink-950">
-                        {/* 🔴 قسم إعدادات الاختبار ونسبة النجاح بقى فوق وأوضح جداً */}
+
+                        {/* 🔴 نسبة النجاح: كارت ضخم وواضح جداً 🔴 */}
+                        <div className="mb-6 rounded-2xl border-2 border-brand-500 bg-brand-50 p-6 shadow-md dark:border-brand-500/50 dark:bg-brand-900/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                          <div>
+                            <label className="flex items-center gap-2 text-lg font-black text-brand-800 dark:text-brand-300">
+                              <Target className="h-6 w-6" /> نسبة النجاح المطلوبة
+                            </label>
+                            <p className="text-sm font-bold text-brand-600/80 dark:text-brand-400/80 mt-1">
+                              النسبة المئوية التي يجب أن يحصل عليها الطالب لاجتياز هذا الاختبار.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 bg-white dark:bg-ink-900 p-2 rounded-xl border border-brand-200 dark:border-brand-800">
+                            <input
+                              required
+                              type="number"
+                              min="1"
+                              max="100"
+                              className="w-16 bg-transparent px-2 py-1 text-center text-2xl font-black text-brand-700 outline-none dark:text-brand-400"
+                              value={newLesson.passingScore}
+                              onChange={e => setNewLesson({ ...newLesson, passingScore: Number(e.target.value) })}
+                            />
+                            <span className="text-2xl font-black text-brand-700 dark:text-brand-300">%</span>
+                          </div>
+                        </div>
+
                         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-ink-100 pb-4 dark:border-white/5">
                           <div>
                             <h5 className="font-bold text-ink-900 dark:text-white flex items-center gap-2">
-                              <Brain className="h-5 w-5 text-brand-600 dark:text-brand-400" /> إعدادات الاختبار
+                              <Brain className="h-5 w-5 text-brand-600 dark:text-brand-400" /> أسئلة الاختبار
                             </h5>
-                            <p className="text-xs text-ink-500 dark:text-ink-400 mt-1">حدد نسبة النجاح وأضف الأسئلة للإختبار.</p>
+                            <p className="text-xs text-ink-500 dark:text-ink-400 mt-1">أضف الأسئلة، ارفع صورة (اختياري)، وحدد الإجابة الصحيحة بالضغط على الدائرة.</p>
                           </div>
-
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 rounded-xl bg-ink-50 px-3 py-2 border border-ink-200 dark:border-white/10 dark:bg-ink-900/50">
-                              <Target className="h-4 w-4 text-brand-500" />
-                              <label className="text-sm font-bold text-ink-700 dark:text-ink-300">النجاح من (%):</label>
-                              <input
-                                required
-                                type="number"
-                                min="1" max="100"
-                                className="w-16 rounded-md bg-white px-2 py-1 text-center text-sm font-bold text-brand-700 outline-none focus:ring-2 focus:ring-brand-500 dark:bg-ink-950 dark:text-brand-300"
-                                value={newLesson.passingScore}
-                                onChange={e => setNewLesson({ ...newLesson, passingScore: Number(e.target.value) })}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setNewLesson({ ...newLesson, questions: [...newLesson.questions, { text: '', image: '', options: ['', '', '', ''], correctOptionIndex: 0 }] })}
-                              className="btn-primary py-2 text-sm shadow-md"
-                            >
-                              <Plus className="mr-1 h-4 w-4" /> إضافة سؤال جديد
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNewLesson({ ...newLesson, questions: [...newLesson.questions, { text: '', image: '', options: ['', '', '', ''], correctOptionIndex: 0 }] })}
+                            className="btn-primary py-2 text-sm shadow-md"
+                          >
+                            <Plus className="mr-1 h-4 w-4" /> إضافة سؤال جديد
+                          </button>
                         </div>
 
                         <div className="space-y-6">
