@@ -30,6 +30,12 @@ interface AppState {
   toggleAnnouncement: (id: string) => void;
   deleteAnnouncement: (id: string) => void;
   removeRejectedEnrollment: (enrollmentId: string) => void;
+  resetStudentDevice: (userId: string) => void;
+
+  // 🔴 الدوال الجديدة للتعديل والمسودة
+  updateCourse: (courseId: string, updates: any) => Promise<void>;
+  updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
+  toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -42,7 +48,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [progress, setProgress] = useState<LessonProgress[]>(persisted.progress ?? []);
+  const [progress, setProgress] = useState<LessonProgress[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
@@ -53,18 +59,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
       const { data: dbUsers } = await supabase.from('users').select('*');
       const { data: dbEnrollments } = await supabase.from('enrollments').select('*');
+      const { data: dbProgress } = await supabase.from('progress').select('*');
 
       if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
       if (dbUsers) setUsers(dbUsers.map((u: any) => ({ id: String(u.id), name: u.name, email: u.email, phone: u.phone, role: u.role, password: u.password, activeDeviceId: u.active_device_id, createdAt: u.created_at } as User)));
+
+      if (dbProgress) {
+        setProgress(dbProgress.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
+      }
 
       let formattedCourses: Course[] = [];
       if (dbCourses) {
         formattedCourses = dbCourses.map((c: any) => {
           const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
-            id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '',
-            videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
+            id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
           })) : [];
-          return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()) } as any;
+          return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: c.is_published ?? true } as any; // 👈 ضفنا isPublished هنا
         });
         setCourses(formattedCourses);
       }
@@ -79,9 +89,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadRealData();
   }, []);
 
-  // 🔴 النظام المحكم لمنع مشاركة الحسابات
   useEffect(() => {
-    const handleSession = async (session: any) => {
+    const handleSession = async (session: any, event: string) => {
       setIsAuthLoading(true);
 
       if (!session) {
@@ -90,62 +99,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // 1. توليد أو جلب بصمة الجهاز الحالي
       const localDeviceId = localStorage.getItem('bashmodares_device_id') || crypto.randomUUID();
       if (!localStorage.getItem('bashmodares_device_id')) {
         localStorage.setItem('bashmodares_device_id', localDeviceId);
       }
 
-      // 2. البحث عن بيانات الطالب في الداتا بيز
       let { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
 
-      // 3. 🚨 الحل السحري: لو الطالب مش موجود (حساب جديد)، ضيفه فوراً واحفظ بصمة جهازه
       if (!dbUser) {
-        const newUser = {
-          id: session.user.id,
-          name: session.user.user_metadata?.full_name || 'طالب جديد',
-          email: session.user.email,
-          role: 'student',
-          active_device_id: localDeviceId // 👈 حفظ البصمة لأول مرة
-        };
-
+        const newUser = { id: session.user.id, name: session.user.user_metadata?.full_name || 'طالب جديد', email: session.user.email, role: 'student', active_device_id: localDeviceId };
         await supabase.from('users').insert([newUser]);
         dbUser = newUser;
       }
 
-      // 4. التحقق من البصمة لمنع المشاركة
       if (dbUser) {
         if (dbUser.role === 'admin') {
-          // الأدمن مسموح له يدخل من أي جهاز
           setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
         }
-        else if (dbUser.active_device_id && dbUser.active_device_id !== localDeviceId) {
-          // 🚨 لو بصمة الجهاز في الداتا بيز مختلفة عن الجهاز اللي بيحاول يدخل -> اطرده!
-          alert("⚠️ عذراً! تم فتح هذا الحساب من جهاز آخر. لا يمكن مشاركة الحساب لضمان أمان المحتوى.");
-          await supabase.auth.signOut();
-          setUser(null);
-        }
         else {
-          // تحديث البصمة لو كانت فاضية (حالة نادرة)
-          if (!dbUser.active_device_id) {
+          if (!dbUser.active_device_id || event === 'SIGNED_IN') {
             await supabase.from('users').update({ active_device_id: localDeviceId }).eq('id', session.user.id);
+            dbUser.active_device_id = localDeviceId;
           }
-          // السماح بالدخول
-          setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
+
+          if (dbUser.active_device_id !== localDeviceId) {
+            alert("⚠️ تم تسجيل الدخول من جهاز آخر، لذلك تم إنهاء جلستك من هنا.");
+            await supabase.auth.signOut();
+            setUser(null);
+          }
+          else {
+            setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
+          }
         }
       }
-
       setIsAuthLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session));
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      handleSession(session);
-    });
-
+    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session, 'INITIAL_SESSION'));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { handleSession(session, event); });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+    const localDeviceId = localStorage.getItem('bashmodares_device_id');
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from('users').select('active_device_id').eq('id', user.id).single();
+      if (data && data.active_device_id && data.active_device_id !== localDeviceId) {
+        await supabase.auth.signOut();
+        setUser(null);
+        alert("⚠️ تم تسجيل الدخول من حسابك في جهاز آخر. سيتم الخروج من هذه الجلسة الآن لحماية الحساب.");
+        window.location.href = '/auth';
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -161,17 +169,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!course) return;
     const isFree = Number(course.price) === 0;
     const initialStatus = isFree ? 'approved' : 'pending';
-
-    const { data: dbData } = await supabase.from('enrollments').insert({
-      student_id: user.id, student_name: user.name, course_id: data.courseId, status: initialStatus,
-      receipt_url: data.receiptUrl || '', payment_method: data.paymentMethod || (isFree ? 'مجانياً' : ''), payment_account: data.paymentAccount || ''
-    }).select();
-
+    const { data: dbData } = await supabase.from('enrollments').insert({ student_id: user.id, student_name: user.name, course_id: data.courseId, status: initialStatus, receipt_url: data.receiptUrl || '', payment_method: data.paymentMethod || (isFree ? 'مجانياً' : ''), payment_account: data.paymentAccount || '' }).select();
     if (dbData && dbData.length > 0) {
-      setEnrollments((prev) => [...prev, {
-        id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title,
-        status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at
-      } as any]);
+      setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title, status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at } as any]);
       alert(isFree ? "تم تفعيل الكورس المجاني بنجاح!" : "تم إرسال الإيصال بنجاح للمراجعة!");
     }
   };
@@ -180,11 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const student = users.find(u => u.id === studentId);
     const course = courses.find(c => c.id === courseId);
     if (!student || !course) return;
-
-    const { data: dbData } = await supabase.from('enrollments').insert({
-      student_id: student.id, student_name: student.name, course_id: courseId, status: 'approved', receipt_url: '', payment_method: 'إضافة يدوية', payment_account: 'الإدارة'
-    }).select();
-
+    const { data: dbData } = await supabase.from('enrollments').insert({ student_id: student.id, student_name: student.name, course_id: courseId, status: 'approved', receipt_url: '', payment_method: 'إضافة يدوية', payment_account: 'الإدارة' }).select();
     if (dbData && dbData.length > 0) {
       setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: student.id, studentName: student.name, courseId: courseId, courseTitle: course.title, status: 'approved', receiptUrl: '', paymentMethod: 'إضافة يدوية', paymentAccount: 'الإدارة', amount: Number(course.price), createdAt: dbData[0].created_at } as any]);
       alert(`تم إضافة الكورس بنجاح للطالب "${student.name}"`);
@@ -196,7 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEnrollments((prev) => prev.map((e) => e.id === id ? { ...e, status, reviewerNote: note } : e));
   };
 
-  const markLessonComplete: AppState['markLessonComplete'] = (lessonId, courseId, quizScore) => {
+  const markLessonComplete: AppState['markLessonComplete'] = async (lessonId, courseId, quizScore) => {
     if (!user) return;
     setProgress((prev) => {
       if (prev.find((p) => p.userId === user.id && p.lessonId === lessonId)) {
@@ -204,10 +200,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return [...prev, { userId: user.id, lessonId, courseId, completed: true, completedAt: new Date().toISOString(), quizScore }];
     });
+    await supabase.from('progress').upsert({ user_id: user.id, lesson_id: lessonId, course_id: courseId, completed: true, quiz_score: quizScore, completed_at: new Date().toISOString() }, { onConflict: 'user_id, lesson_id' });
   };
 
   const isLessonComplete: AppState['isLessonComplete'] = (lessonId) => { return user ? progress.some((p) => p.userId === user.id && p.lessonId === lessonId && p.completed) : false; };
-
   const isLessonUnlocked: AppState['isLessonUnlocked'] = (lessonId, courseId) => {
     if (!user) return false;
     const course = courses.find((c) => c.id === courseId);
@@ -219,18 +215,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCourse: AppState['addCourse'] = async (courseData: any) => {
-    const { data } = await supabase.from('courses').insert({
-      title: courseData.title, description: courseData.description, stage: courseData.stage, grade: courseData.grade,
-      subject: courseData.subject, instructor: courseData.instructor || 'مستر عماد', price: Number(courseData.price), image_url: courseData.coverImage
-    }).select().single();
-    if (data) setCourses(prev => [...prev, { id: String(data.id), title: data.title, description: data.description, stage: data.stage, grade: data.grade, subject: data.subject, instructor: data.instructor, price: data.price, coverImage: data.image_url, imageUrl: data.image_url, lessons: [], createdAt: data.created_at } as any]);
+    const { data } = await supabase.from('courses').insert({ title: courseData.title, description: courseData.description, stage: courseData.stage, grade: courseData.grade, subject: courseData.subject, instructor: courseData.instructor || 'مستر عماد', price: Number(courseData.price), image_url: courseData.coverImage, is_published: true }).select().single();
+    if (data) setCourses(prev => [...prev, { id: String(data.id), title: data.title, description: data.description, stage: data.stage, grade: data.grade, subject: data.subject, instructor: data.instructor, price: data.price, coverImage: data.image_url, imageUrl: data.image_url, lessons: [], createdAt: data.created_at, isPublished: true } as any]);
   };
 
   const addLesson: AppState['addLesson'] = async (courseId, lesson: any) => {
     const nextOrder = courses.find(c => c.id === courseId)?.lessons.length ? courses.find(c => c.id === courseId)!.lessons.length + 1 : 1;
-    const { data } = await supabase.from('lessons').insert({
-      course_id: courseId, title: lesson.title, video_url: lesson.videoUrl, order: nextOrder, type: lesson.type, passing_score: lesson.passingScore, questions: lesson.questions || []
-    }).select().single();
+    const { data } = await supabase.from('lessons').insert({ course_id: courseId, title: lesson.title, video_url: lesson.videoUrl, order: nextOrder, type: lesson.type, passing_score: lesson.passingScore, questions: lesson.questions || [] }).select().single();
     if (data) {
       const newLesson = { id: String(data.id), courseId: String(data.course_id), title: data.title, videoUrl: data.video_url, order: data.order, type: data.type, passingScore: data.passing_score, questions: data.questions };
       setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, lessons: [...c.lessons, newLesson as any] } : c));
@@ -284,11 +275,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEnrollments((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const resetStudentDevice: AppState['resetStudentDevice'] = async (userId) => {
+    await supabase.from('users').update({ active_device_id: null }).eq('id', userId);
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, activeDeviceId: undefined } : u)));
+    alert('تم فك ارتباط جهاز الطالب بنجاح!');
+  };
+
+  // 🔴 الدوال الجديدة للتعديل والنشر
+  const updateCourse: AppState['updateCourse'] = async (courseId, updates) => {
+    await supabase.from('courses').update({
+      title: updates.title, description: updates.description, stage: updates.stage,
+      grade: updates.grade, price: Number(updates.price), image_url: updates.coverImage
+    }).eq('id', courseId);
+
+    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, ...updates, coverImage: updates.coverImage, imageUrl: updates.coverImage } : c));
+    alert('تم تحديث بيانات الكورس بنجاح!');
+  };
+
+  const updateLesson: AppState['updateLesson'] = async (courseId, lessonId, updates) => {
+    await supabase.from('lessons').update({
+      title: updates.title, video_url: updates.videoUrl, type: updates.type,
+      passing_score: updates.passingScore, questions: updates.questions
+    }).eq('id', lessonId);
+
+    setCourses(prev => prev.map(c => c.id === courseId ? {
+      ...c, lessons: c.lessons.map(l => l.id === lessonId ? { ...l, ...updates } : l)
+    } : c));
+    alert('تم تحديث المحتوى بنجاح!');
+  };
+
+  const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
+    const newStatus = !currentStatus;
+    await supabase.from('courses').update({ is_published: newStatus }).eq('id', courseId);
+    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
+  };
+
   const value: AppState = {
     theme, toggleTheme, user, setUser, isAuthLoading, logout, courses, enrollments, progress, announcements, users,
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
-    addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent
+    addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
+    updateCourse, updateLesson, toggleCoursePublish // 👈 إضافة الدوال للمركز الرئيسي
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

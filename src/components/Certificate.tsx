@@ -16,7 +16,7 @@ export function Certificate({ studentName, courseTitle, onClose }: CertificatePr
 
         try {
             const dataUrl = await htmlToImage.toPng(certificateRef.current, {
-                pixelRatio: 4, // يضمن جودة عالية جداً حتى لو تم التحميل من موبايل شاشته صغيرة
+                pixelRatio: 4,
                 cacheBust: true,
                 backgroundColor: "#ffffff",
             });
@@ -55,34 +55,30 @@ export function Certificate({ studentName, courseTitle, onClose }: CertificatePr
                     ref={certificateRef}
                     className="relative flex aspect-[1.414/1] w-full overflow-hidden bg-white"
                 >
-                    {/* صورة التصميم الخاص بك (في الخلفية) */}
+                    {/* صورة الخلفية */}
                     <img
                         src="/my-certificate.png"
                         alt="Certificate Background"
                         className="absolute inset-0 z-0 h-full w-full object-cover"
                     />
 
-                    {/* طبقة النصوص التي ستظهر فوق التصميم */}
-                    <div className="relative z-10 flex h-full w-full flex-col items-center justify-center pt-0">
-
-                        {/* اسم الطالب (أحجام متجاوبة تصغر مع الموبايل) */}
-                        <h2 className="mt-[4%] text-2xl sm:text-3xl md:text-5xl font-black text-ink-900 print:text-black">
+                    {/* 🔴 Layer 1: اسم الطالب (مفصول تماماً ومكانه ثابت من فوق) */}
+                    <div className="absolute left-0 top-[42%] z-10 w-full text-center">
+                        <h2 className="text-2xl font-black text-ink-900 sm:text-3xl md:text-5xl lg:text-6xl print:text-black">
                             {studentName}
                         </h2>
-
-                        {/* مسافة بين الاسم والكورس (باستخدام النسب المئوية للحفاظ على التناسق) */}
-                        <div className="mt-[8%] md:mt-[5.5%]"></div>
-
-                        {/* اسم الكورس (أحجام متجاوبة) */}
-                        <h3 className="text-lg sm:text-2xl md:text-3xl font-bold text-brand-600 print:text-black">
-                            {courseTitle}
-                        </h3>
-
                     </div>
 
-                    {/* التاريخ (تم استخدام النسب المئوية بدلاً من bottom-12 left-24 ليظل في مكانه بدقة على الموبايل) */}
+                    {/* 🔴 Layer 2: اسم الكورس (مكانه ثابت من فوق ومش بيتأثر باسم الطالب) */}
+                    <div className="absolute left-0 top-[58%] z-10 w-full text-center">
+                        <h3 className="text-lg font-bold text-brand-600 sm:text-2xl md:text-3xl lg:text-4xl print:text-black">
+                            {courseTitle}
+                        </h3>
+                    </div>
+
+                    {/* 🔴 Layer 3: التاريخ (مكانه ثابت من تحت وعلى الشمال) */}
                     <div className="absolute bottom-[12%] left-[15%] z-10">
-                        <p className="text-xs sm:text-lg md:text-xl font-bold text-ink-800 print:text-black">
+                        <p className="text-xs font-bold text-ink-800 sm:text-lg md:text-xl lg:text-2xl print:text-black">
                             {new Date().toLocaleDateString('ar-EG')}
                         </p>
                     </div>

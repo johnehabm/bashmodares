@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import {
-  Users, BookOpen, Receipt, DollarSign,
-  CheckCircle2, XCircle, Search, ShieldAlert,
-  PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock,
-  GraduationCap, Bell, LayoutDashboard, FileText, Brain, Save, Plus,
-  Image as ImageIcon, Video, Link as LinkIcon, Upload, Target
+  Users, BookOpen, Receipt, DollarSign, CheckCircle2, XCircle, Search, ShieldAlert,
+  PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock, GraduationCap, Bell, LayoutDashboard,
+  FileText, Brain, Save, Plus, Image as ImageIcon, Video, Link as LinkIcon, Upload, Target,
+  Edit3, EyeOff, Phone
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { StatusBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 
 // ==========================================
-// 1. قسم نظرة عامة (Overview)
+// 1. Overview
 // ==========================================
 function OverviewTab() {
   const { users, enrollments, progress } = useApp();
@@ -76,7 +75,7 @@ function OverviewTab() {
 }
 
 // ==========================================
-// 2. قسم إدارة الإيصالات (Enrollments)
+// 2. Enrollments
 // ==========================================
 function EnrollmentsTab() {
   const { enrollments, updateEnrollmentStatus } = useApp();
@@ -177,41 +176,62 @@ function EnrollmentsTab() {
 }
 
 // ==========================================
-// 3. قسم إدارة الكورسات والمحتوى (Courses)
+// 3. Courses
 // ==========================================
 function CoursesTab() {
-  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson } = useApp();
+  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson, updateCourse, updateLesson, toggleCoursePublish } = useApp();
+
   const [showAddCourse, setShowAddCourse] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+
   const [addingLessonTo, setAddingLessonTo] = useState<string | null>(null);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   const [newCourse, setNewCourse] = useState({ title: '', description: '', stage: 'primary', grade: '', subject: '', price: '', coverImage: '' });
-
   const [newLesson, setNewLesson] = useState<{
-    title: string;
-    videoUrl: string;
-    type: string;
-    passingScore: number;
-    questions: { text: string; image?: string; options: string[]; correctOptionIndex: number }[];
+    title: string; videoUrl: string; type: string; passingScore: number; questions: { text: string; image?: string; options: string[]; correctOptionIndex: number }[];
   }>({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] });
 
   const [uploadingImageIdx, setUploadingImageIdx] = useState<number | null>(null);
 
-  const handleAddCourse = (e: React.FormEvent) => {
-    e.preventDefault();
-    addCourse(newCourse);
-    setNewCourse({ title: '', description: '', stage: 'primary', grade: '', subject: '', price: '', coverImage: '' });
-    setShowAddCourse(false);
+  const openEditCourse = (course: any) => {
+    setNewCourse({ title: course.title, description: course.description, stage: course.stage, grade: course.grade, subject: course.subject || '', price: course.price, coverImage: course.coverImage });
+    setEditingCourseId(course.id);
+    setShowAddCourse(true);
   };
 
-  const handleAddLesson = (courseId: string, e: React.FormEvent) => {
+  const handleSaveCourse = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingCourseId) {
+      updateCourse(editingCourseId, newCourse);
+    } else {
+      addCourse(newCourse);
+    }
+    setNewCourse({ title: '', description: '', stage: 'primary', grade: '', subject: '', price: '', coverImage: '' });
+    setShowAddCourse(false);
+    setEditingCourseId(null);
+  };
+
+  const openEditLesson = (courseId: string, lesson: any) => {
+    setNewLesson({ title: lesson.title, videoUrl: lesson.videoUrl, type: lesson.type, passingScore: lesson.passingScore || 50, questions: lesson.questions || [] });
+    setAddingLessonTo(courseId);
+    setEditingLessonId(lesson.id);
+  };
+
+  const handleSaveLesson = (courseId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (newLesson.type === 'quiz' && newLesson.questions.length === 0) {
       alert('يجب إضافة سؤال واحد على الأقل للاختبار!');
       return;
     }
-    addLesson(courseId, newLesson);
+    if (editingLessonId) {
+      updateLesson(courseId, editingLessonId, newLesson);
+    } else {
+      addLesson(courseId, newLesson);
+    }
     setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] });
     setAddingLessonTo(null);
+    setEditingLessonId(null);
   };
 
   const uploadQuestionImage = async (file: File, qIdx: number) => {
@@ -237,7 +257,7 @@ function CoursesTab() {
     <div className="animate-fade-in space-y-6 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">إدارة الكورسات والمحتوى</h2>
-        <button onClick={() => setShowAddCourse(true)} className="btn-primary w-full sm:w-auto justify-center py-3 shadow-lg shadow-brand-500/20">
+        <button onClick={() => { setEditingCourseId(null); setNewCourse({ title: '', description: '', stage: 'primary', grade: '', subject: '', price: '', coverImage: '' }); setShowAddCourse(true); }} className="btn-primary w-full sm:w-auto justify-center py-3 shadow-lg shadow-brand-500/20">
           <PlusCircle className="h-5 w-5" /> إضافة كورس جديد
         </button>
       </div>
@@ -247,11 +267,11 @@ function CoursesTab() {
           <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm transition-opacity" onClick={() => setShowAddCourse(false)}></div>
           <div className="relative w-full h-[95vh] sm:h-auto sm:max-h-[90vh] sm:max-w-3xl flex flex-col overflow-hidden rounded-t-[2rem] sm:rounded-[2rem] bg-white shadow-2xl transition-all dark:bg-[#171a36]">
             <div className="flex shrink-0 items-center justify-between bg-gradient-to-l from-brand-600 to-brand-800 px-6 py-5 text-white">
-              <h3 className="flex items-center gap-3 text-xl sm:text-2xl font-black"><PlusCircle className="h-6 w-6 sm:h-7 sm:w-7" /> إنشاء كورس</h3>
+              <h3 className="flex items-center gap-3 text-xl sm:text-2xl font-black"><Edit3 className="h-6 w-6 sm:h-7 sm:w-7" /> {editingCourseId ? 'تعديل بيانات الكورس' : 'إنشاء كورس جديد'}</h3>
               <button onClick={() => setShowAddCourse(false)} className="rounded-full bg-white/10 p-2 hover:bg-white/20"><XCircle className="h-6 w-6" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <form onSubmit={handleAddCourse} className="space-y-6">
+              <form onSubmit={handleSaveCourse} className="space-y-6">
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><BookOpen className="h-4 w-4 text-brand-500" /> اسم الكورس</label>
@@ -283,7 +303,7 @@ function CoursesTab() {
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row justify-end gap-3 border-t border-ink-100 pt-6 dark:border-white/10">
-                  <button type="submit" className="btn-primary w-full sm:w-auto py-3 sm:px-8 justify-center"><Save className="mr-2 h-5 w-5" /> حفظ ونشر</button>
+                  <button type="submit" className="btn-primary w-full sm:w-auto py-3 sm:px-8 justify-center"><Save className="mr-2 h-5 w-5" /> حفظ التغييرات</button>
                   <button type="button" onClick={() => setShowAddCourse(false)} className="btn-outline w-full sm:w-auto py-3 sm:px-8 justify-center">إلغاء</button>
                 </div>
               </form>
@@ -296,12 +316,20 @@ function CoursesTab() {
         {courses.map(course => {
           const courseEnrs = enrollments.filter(e => e.courseId === course.id && e.status === 'approved');
           const courseRevenue = courseEnrs.reduce((sum, e) => sum + Number(e.amount), 0);
+          const isDraft = (course as any).isPublished === false;
 
           return (
-            <div key={course.id} className="overflow-hidden rounded-[2rem] border border-ink-200 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+            <div key={course.id} className={`overflow-hidden rounded-[2rem] border transition-all ${isDraft ? 'border-ink-200 bg-ink-50/50 grayscale-[20%] dark:border-white/5 dark:bg-white/5' : 'border-brand-200 bg-white/70 shadow-sm backdrop-blur-xl dark:border-brand-500/20 dark:bg-white/5'}`}>
               <div className="flex flex-col sm:flex-row gap-4 justify-between border-b border-ink-100 p-5 sm:p-6 dark:border-white/5">
-                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                  <img src={course.coverImage} alt={course.title} className="w-full aspect-[2/1] sm:aspect-square sm:w-16 sm:h-16 rounded-2xl object-cover shadow-sm" />
+                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto relative">
+
+                  {isDraft && (
+                    <div className="absolute -top-3 -right-3 z-10 flex items-center gap-1 rounded-bl-xl rounded-tr-xl bg-ink-800 px-3 py-1 text-xs font-bold text-white shadow-md">
+                      <EyeOff className="h-3 w-3" /> مسودة (مخفي)
+                    </div>
+                  )}
+
+                  <img src={course.coverImage} alt={course.title} className="w-full aspect-[2/1] sm:aspect-square sm:w-20 sm:h-20 rounded-2xl object-cover shadow-sm" />
                   <div className="flex flex-col justify-center">
                     <h3 className="text-lg sm:text-xl font-bold text-ink-900 dark:text-white line-clamp-2">{course.title}</h3>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm font-bold">
@@ -311,12 +339,19 @@ function CoursesTab() {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto pt-2 sm:pt-0">
-                  <button onClick={() => setAddingLessonTo(addingLessonTo === course.id ? null : course.id)} className="flex-1 sm:flex-none justify-center flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 sm:py-2 text-sm font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400">
+
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0">
+                  <button onClick={() => toggleCoursePublish(course.id, !isDraft)} title={isDraft ? "نشر الكورس للطلاب" : "إخفاء الكورس (مسودة)"} className={`flex items-center justify-center p-2.5 sm:p-2 rounded-xl text-sm font-bold transition-colors ${isDraft ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300'}`}>
+                    {isDraft ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                  <button onClick={() => openEditCourse(course)} title="تعديل بيانات الكورس" className="flex items-center justify-center p-2.5 sm:p-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => { setAddingLessonTo(addingLessonTo === course.id ? null : course.id); setEditingLessonId(null); setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] }); }} className="flex-1 sm:flex-none justify-center flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 sm:py-2 text-sm font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400">
                     <PlusCircle className="h-4 w-4" /> إضافة محتوى
                   </button>
-                  <button onClick={() => { if (window.confirm('متأكد من حذف الكورس؟')) deleteCourse(course.id); }} className="flex-1 sm:flex-none justify-center flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 sm:py-2 text-sm font-bold text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
-                    <Trash2 className="h-4 w-4" /> حذف
+                  <button onClick={() => { if (window.confirm('متأكد من حذف الكورس نهائياً بكل محتوياته؟')) deleteCourse(course.id); }} className="flex items-center justify-center p-2.5 sm:p-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -325,9 +360,9 @@ function CoursesTab() {
                 <div className="border-b border-ink-100 bg-brand-50/50 p-5 sm:p-6 dark:border-white/5 dark:bg-brand-900/10">
                   <div className="mb-4 flex items-center gap-2 text-brand-700 dark:text-brand-300">
                     <Video className="h-5 w-5" />
-                    <h4 className="font-bold text-sm sm:text-base">إضافة محتوى لـ ({course.title})</h4>
+                    <h4 className="font-bold text-sm sm:text-base">{editingLessonId ? 'تعديل المحتوى' : 'إضافة محتوى جديد'}</h4>
                   </div>
-                  <form onSubmit={(e) => handleAddLesson(course.id, e)}>
+                  <form onSubmit={(e) => handleSaveLesson(course.id, e)}>
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-ink-600 dark:text-ink-300">عنوان المحتوى</label>
@@ -406,7 +441,7 @@ function CoursesTab() {
                     )}
 
                     <div className="mt-6">
-                      <button type="submit" className="btn-primary w-full sm:w-auto py-3 sm:py-2.5 justify-center"><Save className="mr-2 h-4 w-4" /> حفظ ونشر المحتوى</button>
+                      <button type="submit" className="btn-primary w-full sm:w-auto py-3 sm:py-2.5 justify-center"><Save className="mr-2 h-4 w-4" /> حفظ التعديلات</button>
                     </div>
                   </form>
                 </div>
@@ -422,7 +457,10 @@ function CoursesTab() {
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-ink-500 dark:bg-ink-900"><PlayCircle className="h-4 w-4" /></div>
                           <span className="truncate text-sm font-bold text-ink-700 dark:text-ink-200">{idx + 1}. {lesson.title}</span>
                         </div>
-                        <button onClick={() => { if (window.confirm('حذف المحتوى؟')) deleteLesson(course.id, lesson.id); }} className="text-red-500 p-2"><Trash2 className="h-4 w-4" /></button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEditLesson(course.id, lesson)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-md"><Edit3 className="h-4 w-4" /></button>
+                          <button onClick={() => { if (window.confirm('حذف المحتوى؟')) deleteLesson(course.id, lesson.id); }} className="text-red-500 hover:bg-red-100 p-1.5 rounded-md"><Trash2 className="h-4 w-4" /></button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -439,7 +477,7 @@ function CoursesTab() {
 }
 
 // ==========================================
-// 4. قسم إدارة الطلاب (Students)
+// 4. Students
 // ==========================================
 function StudentsTab() {
   const { users, courses, enrollments, progress, resetStudentPassword, toggleStudentAccess, adminEnrollStudent } = useApp();
@@ -463,7 +501,7 @@ function StudentsTab() {
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">إدارة الطلاب</h2>
         <div className="relative w-full sm:w-72">
           <Search className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
-          <input type="text" placeholder="ابحث بالاسم أو الايميل..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-field w-full pr-10 py-3 sm:py-2.5" />
+          <input type="text" placeholder="ابحث بالاسم، الايميل، أو الموبايل..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-field w-full pr-10 py-3 sm:py-2.5" />
         </div>
       </div>
 
@@ -476,7 +514,11 @@ function StudentsTab() {
                 <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xl font-black text-brand-600 dark:bg-brand-900/50">{student.name.charAt(0)}</div>
                 <div className="flex-1 overflow-hidden">
                   <h3 className="truncate text-base sm:text-lg font-bold text-ink-900 dark:text-white">{student.name}</h3>
-                  <p className="truncate text-xs text-ink-500" dir="ltr">{student.email}</p>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs text-ink-600 dark:text-ink-400">
+                    <Phone className="h-3 w-3" />
+                    <span dir="ltr" className="font-bold">{student.phone || 'بدون رقم'}</span>
+                  </div>
+                  <p className="truncate text-xs text-ink-400 mt-0.5" dir="ltr">{student.email}</p>
                 </div>
                 {isBanned && <ShieldAlert className="h-5 w-5 text-red-500 shrink-0" />}
               </div>
@@ -493,7 +535,10 @@ function StudentsTab() {
           <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={() => setSelectedStudent(null)}></div>
           <div className="relative w-full h-[95vh] sm:h-auto sm:max-h-[90vh] sm:max-w-xl flex flex-col overflow-hidden rounded-t-[2rem] sm:rounded-[2rem] bg-white shadow-2xl dark:bg-[#171a36]">
             <div className="bg-gradient-to-l from-brand-600 to-brand-800 p-6 text-white flex shrink-0 items-center justify-between">
-              <h2 className="text-xl sm:text-2xl font-black truncate pr-2">{selectedStudent.name}</h2>
+              <div className="overflow-hidden pr-2">
+                <h2 className="text-xl sm:text-2xl font-black truncate">{selectedStudent.name}</h2>
+                <p className="text-sm opacity-80" dir="ltr">{selectedStudent.phone || selectedStudent.email}</p>
+              </div>
               <button onClick={() => setSelectedStudent(null)} className="rounded-full bg-white/20 p-2"><XCircle className="h-6 w-6" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
@@ -532,12 +577,17 @@ function StudentsTab() {
                 )}
               </div>
 
+              {/* 🔴 زرارين بس ورجعنا الأعمدة لـ 2 عشان الشكل يبقى أروع */}
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-ink-100 pt-6 dark:border-white/10">
-                <button onClick={() => { const newPass = prompt('الباسوورد الجديد:'); if (newPass) resetStudentPassword(selectedStudent.id, newPass); }} className="flex items-center justify-center gap-2 rounded-xl bg-ink-100 py-3.5 sm:py-3 text-sm font-bold text-ink-700 dark:bg-ink-800 dark:text-ink-300"><Lock className="h-4 w-4" /> تغيير الباسوورد</button>
-                <button onClick={() => { if (window.confirm('متأكد من تغيير الحالة؟')) toggleStudentAccess(selectedStudent.id); }} className={`flex items-center justify-center gap-2 rounded-xl py-3.5 sm:py-3 text-sm font-bold text-white ${selectedStudent.password === '__DISABLED__' ? 'bg-emerald-600' : 'bg-red-600'}`}>
+                <button onClick={() => { const newPass = prompt('الباسوورد الجديد:'); if (newPass) resetStudentPassword(selectedStudent.id, newPass); }} className="flex items-center justify-center gap-2 rounded-xl bg-ink-100 py-3.5 sm:py-3 text-sm font-bold text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300">
+                  <Lock className="h-4 w-4" /> باسوورد جديد
+                </button>
+
+                <button onClick={() => { if (window.confirm('متأكد من تغيير الحالة؟')) toggleStudentAccess(selectedStudent.id); }} className={`flex items-center justify-center gap-2 rounded-xl py-3.5 sm:py-3 text-sm font-bold text-white transition-colors ${selectedStudent.password === '__DISABLED__' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>
                   {selectedStudent.password === '__DISABLED__' ? <><Unlock className="h-4 w-4" /> تفعيل الحساب</> : <><ShieldAlert className="h-4 w-4" /> حظر الطالب</>}
                 </button>
               </div>
+
             </div>
           </div>
         </div>
@@ -547,7 +597,7 @@ function StudentsTab() {
 }
 
 // ==========================================
-// 5. قسم إدارة الإشعارات (Announcements)
+// 5. Announcements
 // ==========================================
 function AnnouncementsTab() {
   const { announcements, addAnnouncement, toggleAnnouncement, deleteAnnouncement } = useApp();
@@ -579,7 +629,7 @@ function AnnouncementsTab() {
 }
 
 // ==========================================
-// 🚀 الملف الرئيسي (تم إصلاح العرض المخفي)
+// Main Dashboard
 // ==========================================
 export function AdminDashboard() {
   const { user, enrollments } = useApp();
@@ -592,7 +642,6 @@ export function AdminDashboard() {
   const pendingCount = enrollments.filter((e) => e.status === 'pending').length;
 
   return (
-    /* ✅ هنا تم إضافة overflow-x-hidden و w-full لمنع تمدد الشاشة بسبب دوائر الخلفية ✅ */
     <div className="relative min-h-screen w-full overflow-x-hidden bg-ink-50 font-sans transition-colors duration-500 dark:bg-[#0f1123]">
       <div className="pointer-events-none absolute -top-40 right-0 h-[600px] w-[600px] rounded-full bg-brand-500/10 blur-[150px] dark:bg-brand-600/10"></div>
       <div className="pointer-events-none absolute left-0 top-1/3 h-[500px] w-[500px] rounded-full bg-[#f01c6d]/5 blur-[120px] dark:bg-[#f01c6d]/10"></div>
@@ -606,7 +655,6 @@ export function AdminDashboard() {
             <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">نظرة شاملة وتحكم كامل في جميع أقسام المنصة.</p>
           </div>
 
-          {/* ✅ تم التعديل ليتمكن المستخدم من التمرير الأفقي بين الأقسام (Tabs) بدلاً من الانضغاط ✅ */}
           <div className="-mx-4 px-4 sm:mx-0 sm:px-0 w-screen sm:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="flex w-max gap-2 rounded-2xl bg-white/50 p-1.5 shadow-sm backdrop-blur-md dark:bg-white/5">
               {[
@@ -637,7 +685,6 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* تحميل القسم بناءً على التاب النشط */}
         <div className="pb-16 sm:pb-8">
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'enrollments' && <EnrollmentsTab />}
