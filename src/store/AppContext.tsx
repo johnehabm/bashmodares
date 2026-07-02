@@ -34,6 +34,7 @@ interface AppState {
   updateCourse: (courseId: string, updates: any) => Promise<void>;
   updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
   toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
+  deleteEnrollments: (ids: string[]) => Promise<void>; // 🔴 الدالة الجديدة للمسح المجمع
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -323,23 +324,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alert('✅ تم تحديث المحتوى بنجاح!');
   };
 
-  // 🔴 دالة الإخفاء والإظهار الخارقة (مفيهاش ولا غلطة)
   const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
     try {
       const newStatus = !currentStatus;
 
-      // 1. تحديث لحظي للواجهة (تغيير اللون)
       setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
 
-      // 2. تحديث قاعدة البيانات في الخلفية
       const { data, error } = await supabase.from('courses')
         .update({ is_published: newStatus })
         .eq('id', courseId)
         .select();
 
-      // 3. كشف أي خطأ أو رفض من السيرفر
       if (error || !data || data.length === 0) {
-        // لو حصل مشكلة نرجع الكورس زي ما كان
         setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
         alert(`⚠️ الداتا بيز رفضت التعديل! تأكد من تشغيل كود الـ SQL الأخير لفتح صلاحيات التعديل للمسؤول.`);
       }
@@ -350,12 +346,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 🔴 الدالة الخارقة لمسح مجموعة من الإيصالات مع بعض
+  const deleteEnrollments: AppState['deleteEnrollments'] = async (ids) => {
+    try {
+      const { error } = await supabase.from('enrollments').delete().in('id', ids);
+      if (error) {
+        alert(`⚠️ حدث خطأ أثناء المسح: ${error.message}`);
+        return;
+      }
+      setEnrollments((prev) => prev.filter((e) => !ids.includes(e.id)));
+      alert('✅ تم مسح الإيصالات المحددة بنجاح!');
+    } catch (err: any) {
+      alert(`⚠️ خطأ: ${err.message}`);
+    }
+  };
+
   const value: AppState = {
     theme, toggleTheme, user, setUser, isAuthLoading, logout, courses, enrollments, progress, announcements, users,
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
     addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
-    updateCourse, updateLesson, toggleCoursePublish
+    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments // 👈 تم إضافتها هنا
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // 🔴 ضفنا useEffect هنا
 import {
   Users, BookOpen, Receipt, DollarSign, CheckCircle2, XCircle, Search, ShieldAlert,
   PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock, GraduationCap, Bell, LayoutDashboard,
@@ -75,12 +75,19 @@ function OverviewTab() {
 }
 
 // ==========================================
-// 2. Enrollments
+// 2. Enrollments (تم تطوير التحديد والمسح المجمع) 🚀
 // ==========================================
 function EnrollmentsTab() {
-  const { enrollments, updateEnrollmentStatus } = useApp();
+  const { enrollments, updateEnrollmentStatus, deleteEnrollments } = useApp(); // 🔴 استدعاء الدالة الجديدة
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]); // 🔴 سلة التحديد
+
   const filtered = enrollments.filter(e => filter === 'all' ? true : e.status === filter).reverse();
+
+  // 🔴 لتفريغ التحديد أول ما تغير الفلتر (عشان متسمحش حاجة بالغلط)
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [filter]);
 
   const handleStatusUpdate = (id: string, status: 'approved' | 'rejected') => {
     if (status === 'rejected') {
@@ -91,22 +98,76 @@ function EnrollmentsTab() {
     }
   };
 
+  // 🔴 إضافة/إزالة إيصال واحد للسلة
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  // 🔴 زرار تحديد الكل
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(e => e.id));
+    }
+  };
+
+  // 🔴 زرار المسح الفعلي
+  const handleBulkDelete = async () => {
+    const isApprovedSelected = selectedIds.some(id => enrollments.find(e => e.id === id)?.status === 'approved');
+    const msg = isApprovedSelected
+      ? `⚠️ تحذير خطير: من ضمن المحدد إيصالات "مقبولة"!\nمسحها سيلغي اشتراك هؤلاء الطلاب في الكورس فوراً.\n\nهل أنت متأكد من مسح (${selectedIds.length}) إيصال؟`
+      : `هل أنت متأكد من مسح (${selectedIds.length}) إيصال نهائياً؟`;
+
+    if (window.confirm(msg)) {
+      await deleteEnrollments(selectedIds);
+      setSelectedIds([]); // تفريغ السلة بعد المسح
+    }
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">مراجعة الإيصالات</h2>
-        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="flex w-max gap-2 rounded-xl bg-white p-1.5 shadow-sm dark:bg-[#171a36]">
-            {['all', 'pending', 'approved', 'rejected'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f as any)}
-                className={`rounded-lg px-4 py-2 text-sm font-bold transition-all shrink-0 ${filter === f ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300' : 'text-ink-600 hover:bg-ink-50 dark:text-ink-400 dark:hover:bg-white/5'
-                  }`}
-              >
-                {f === 'all' ? 'الكل' : f === 'pending' ? 'معلق' : f === 'approved' ? 'مقبول' : 'مرفوض'}
-              </button>
-            ))}
+
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          {/* 🔴 أزرار التحديد والمسح السريعة */}
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-3 bg-white dark:bg-[#171a36] p-1.5 rounded-xl shadow-sm border border-ink-100 dark:border-white/5">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-ink-700 dark:text-ink-300 px-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 accent-brand-600 rounded"
+                />
+                تحديد الكل
+              </label>
+
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-600 transition-colors shadow-md shadow-red-500/20"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> حذف ({selectedIds.length})
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="flex w-max gap-2 rounded-xl bg-white p-1.5 shadow-sm dark:bg-[#171a36] border border-ink-100 dark:border-white/5">
+              {['all', 'pending', 'approved', 'rejected'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f as any)}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition-all shrink-0 ${filter === f ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300' : 'text-ink-600 hover:bg-ink-50 dark:text-ink-400 dark:hover:bg-white/5'
+                    }`}
+                >
+                  {f === 'all' ? 'الكل' : f === 'pending' ? 'معلق' : f === 'approved' ? 'مقبول' : 'مرفوض'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -117,12 +178,25 @@ function EnrollmentsTab() {
         ) : (
           filtered.map((enr) => {
             const enrollDate = new Date(enr.createdAt);
+            const statusText = enr.status === 'pending' ? 'بانتظار المراجعة' : enr.status === 'approved' ? 'مقبول' : 'مرفوض';
+
             return (
-              <div key={enr.id} className="flex flex-col rounded-[2rem] border border-ink-200 bg-white/70 p-4 sm:p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+              <div key={enr.id} className={`flex flex-col rounded-[2rem] border p-4 sm:p-5 shadow-sm backdrop-blur-xl transition-all ${selectedIds.includes(enr.id) ? 'border-brand-500 bg-brand-50/30 dark:border-brand-500/50 dark:bg-brand-900/10' : 'border-ink-200 bg-white/70 dark:border-white/10 dark:bg-white/5'}`}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div className="overflow-hidden">
-                    <h3 className="truncate font-bold text-ink-900 dark:text-white">{enr.studentName}</h3>
-                    <p className="text-xs text-ink-500 dark:text-ink-400 mt-1">بانتظار المراجعة</p>
+                  <div className="flex items-start gap-3 overflow-hidden w-full">
+                    {/* 🔴 مربع التحديد جوه الكارت */}
+                    <div className="pt-1 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(enr.id)}
+                        onChange={() => toggleSelection(enr.id)}
+                        className="h-5 w-5 accent-brand-600 rounded border-ink-300 cursor-pointer shadow-sm"
+                      />
+                    </div>
+                    <div className="overflow-hidden">
+                      <h3 className="truncate font-bold text-ink-900 dark:text-white">{enr.studentName}</h3>
+                      <p className="text-xs text-ink-500 dark:text-ink-400 mt-1">{statusText}</p>
+                    </div>
                   </div>
                   <div className="shrink-0"><StatusBadge status={enr.status} /></div>
                 </div>
@@ -577,7 +651,6 @@ function StudentsTab() {
                 )}
               </div>
 
-              {/* 🔴 زرارين بس ورجعنا الأعمدة لـ 2 عشان الشكل يبقى أروع */}
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-ink-100 pt-6 dark:border-white/10">
                 <button onClick={() => { const newPass = prompt('الباسوورد الجديد:'); if (newPass) resetStudentPassword(selectedStudent.id, newPass); }} className="flex items-center justify-center gap-2 rounded-xl bg-ink-100 py-3.5 sm:py-3 text-sm font-bold text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300">
                   <Lock className="h-4 w-4" /> باسوورد جديد
