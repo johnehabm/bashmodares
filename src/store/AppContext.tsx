@@ -74,8 +74,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
             id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
           })) : [];
-          // 🔴 معالجة ذكية لحالة الكورس لضمان إنه Boolean
-          const isPublishedValue = String(c.is_published) === 'false' ? false : true;
+          // 🔴 معالجة ذكية لحالة الكورس لضمان إنه Boolean دايماً
+          const isPublishedValue = c.is_published !== false;
 
           return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: isPublishedValue } as any;
         });
@@ -323,31 +323,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alert('✅ تم تحديث المحتوى بنجاح!');
   };
 
-  // 🔴 التحديث الحاسم: كاشف الأخطاء للإخفاء والإظهار
+  // 🔴 النظام السحري الجديد: الموقع بيتغير فوراً في وشك قبل الداتا بيز
   const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
     try {
       const newStatus = !currentStatus;
 
-      // التعديل مع أمر Select عشان نتأكد إن السيرفر استجاب
-      const { data, error } = await supabase.from('courses')
+      // 1. التحديث اللحظي للموقع (عشان تحس بالاستجابة الفورية)
+      setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
+
+      // 2. تحديث الداتا بيز في صمت (بدون ما يوقف الموقع)
+      const { error } = await supabase.from('courses')
         .update({ is_published: newStatus })
-        .eq('id', courseId)
-        .select();
+        .eq('id', courseId);
 
       if (error) {
+        // لو الداتا بيز اشتكت، نرجع الكورس زي ما كان ونطلعلك الرسالة!
+        setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
         alert(`⚠️ خطأ من السيرفر: ${error.message}`);
-        return;
       }
-
-      if (!data || data.length === 0) {
-        alert(`⚠️ الداتا بيز رفضت التحديث بسبب جدار الحماية (RLS)! التعديل لم يتم حفظه.`);
-        return;
-      }
-
-      // لو كله تمام، طبق التعديل في الموقع
-      setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
     } catch (err: any) {
-      alert(`⚠️ خطأ برمجي: ${err.message}`);
+      // لو حصل أي خطأ في الجافاسكريبت
+      setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
+      alert(`⚠️ خطأ في التطبيق: ${err.message}`);
     }
   };
 

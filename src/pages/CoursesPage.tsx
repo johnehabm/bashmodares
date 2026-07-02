@@ -6,6 +6,7 @@ import { useApp } from '../store/AppContext';
 export function CoursesPage() {
   // استخدام قيمة افتراضية لحماية الصفحة لو الداتا لسه بتيجي
   const { courses } = useApp() || { courses: [] };
+  const visibleCourses = courses.filter((c: any) => c.isPublished !== false);
   const [filter, setFilter] = useState<'all' | 'primary' | 'preparatory' | 'secondary'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -65,8 +66,8 @@ export function CoursesPage() {
               key={stage.id}
               onClick={() => setFilter(stage.id as any)}
               className={`shrink-0 rounded-full px-6 py-2.5 text-sm font-bold transition-all ${filter === stage.id
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
-                  : 'bg-white text-ink-600 hover:bg-ink-50 dark:bg-[#171a36] dark:text-ink-300 dark:hover:bg-white/5'
+                ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
+                : 'bg-white text-ink-600 hover:bg-ink-50 dark:bg-[#171a36] dark:text-ink-300 dark:hover:bg-white/5'
                 }`}
             >
               {stage.label}
