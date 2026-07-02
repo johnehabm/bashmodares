@@ -35,6 +35,7 @@ interface AppState {
   updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
   toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
   deleteEnrollments: (ids: string[]) => Promise<void>;
+  reorderLesson: (courseId: string, lessonId: string, direction: 'up' | 'down') => Promise<void>; // 🔴 دالة الترتيب الجديدة
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -88,7 +89,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const relatedCourse = formattedCourses.find(c => c.id === String(e.course_id));
           return {
             id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at),
-            isArchived: e.is_archived === true // 🔴 ربط حالة الأرشفة من الداتا بيز
+            isArchived: e.is_archived === true
           } as any;
         }));
       } else {
@@ -349,25 +350,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔴 الدالة الخارقة للأرشفة والمسح الذكي
   const deleteEnrollments: AppState['deleteEnrollments'] = async (ids) => {
     try {
-      // فصلنا الإيصالات المرفوضة عن المقبولة
       const enrollmentsToProcess = enrollments.filter(e => ids.includes(e.id));
       const approvedIds = enrollmentsToProcess.filter(e => e.status === 'approved').map(e => e.id);
       const otherIds = enrollmentsToProcess.filter(e => e.status !== 'approved').map(e => e.id);
 
-      // 1. مسح المرفوض/المعلق مسح نهائي من الداتا بيز
       if (otherIds.length > 0) {
         await supabase.from('enrollments').delete().in('id', otherIds);
       }
 
-      // 2. المقبول بيتعمله أرشفة ومسح لصورته فقط! (لحماية الكورس)
       if (approvedIds.length > 0) {
         await supabase.from('enrollments').update({ is_archived: true, receipt_url: '' }).in('id', approvedIds);
       }
 
-      // تحديث السيستم قدامك عشان يختفوا
       setEnrollments((prev) => prev.map(e => {
         if (approvedIds.includes(e.id)) return { ...e, isArchived: true, receiptUrl: '' } as any;
         return e;
@@ -379,12 +375,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 🔴 الدالة السحرية لترتيب الدروس
+  const reorderLesson: AppState['reorderLesson'] = async (courseId, lessonId, direction) => {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+
+    // بنرتب الدروس ترتيب سليم عشان نعرف مين فوق ومين تحت
+    const lessonsList = [...course.lessons].sort((a, b) => a.order - b.order);
+    const currentIndex = lessonsList.findIndex(l => l.id === lessonId);
+
+    if (currentIndex === -1) return;
+
+    // بنحدد هنبدل مع مين (اللي فوقه ولا اللي تحته)
+    let targetIndex = -1;
+    if (direction === 'up' && currentIndex > 0) targetIndex = currentIndex - 1;
+    if (direction === 'down' && currentIndex < lessonsList.length - 1) targetIndex = currentIndex + 1;
+
+    if (targetIndex === -1) return;
+
+    const currentLesson = lessonsList[currentIndex];
+    const targetLesson = lessonsList[targetIndex];
+
+    // بنبدل رقم الترتيب
+    const tempOrder = currentLesson.order;
+    currentLesson.order = targetLesson.order;
+    targetLesson.order = tempOrder;
+
+    // بنحدث الداتا بيز فورا
+    await supabase.from('lessons').update({ order: currentLesson.order }).eq('id', currentLesson.id);
+    await supabase.from('lessons').update({ order: targetLesson.order }).eq('id', targetLesson.id);
+
+    // تحديث الموقع عشان تحس بالسرعة
+    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, lessons: lessonsList } : c));
+  };
+
   const value: AppState = {
     theme, toggleTheme, user, setUser, isAuthLoading, logout, courses, enrollments, progress, announcements, users,
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
     addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
-    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments
+    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments, reorderLesson // 👈 تم التصدير
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

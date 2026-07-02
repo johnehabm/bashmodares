@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'; // 🔴 ضفنا useEffect هنا
+import { useState, useEffect } from 'react';
 import {
   Users, BookOpen, Receipt, DollarSign, CheckCircle2, XCircle, Search, ShieldAlert,
   PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock, GraduationCap, Bell, LayoutDashboard,
   FileText, Brain, Save, Plus, Image as ImageIcon, Video, Link as LinkIcon, Upload, Target,
-  Edit3, EyeOff, Phone
+  Edit3, EyeOff, Phone, ArrowUp, ArrowDown, Download // 🔴 ضفنا أيقونات الأسهم والتحميل
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { StatusBadge } from '../components/ui';
@@ -75,14 +75,13 @@ function OverviewTab() {
 }
 
 // ==========================================
-// 2. Enrollments (تم تطوير التحديد والمسح المجمع) 🚀
+// 2. Enrollments
 // ==========================================
 function EnrollmentsTab() {
   const { enrollments, updateEnrollmentStatus, deleteEnrollments } = useApp();
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // 🔴 فلترة الإيصالات واستبعاد المؤرشف عشان ميظهرش في اللوحة!
   const activeEnrollments = enrollments.filter((e: any) => !e.isArchived);
   const filtered = activeEnrollments.filter((e: any) => filter === 'all' ? true : e.status === filter).reverse();
 
@@ -111,7 +110,6 @@ function EnrollmentsTab() {
     }
   };
 
-  // 🔴 رسالة ذكية تطمنك إن الكورس مش هيطير
   const handleBulkDelete = async () => {
     const isApprovedSelected = selectedIds.some(id => enrollments.find(e => e.id === id)?.status === 'approved');
     const msg = isApprovedSelected
@@ -250,7 +248,7 @@ function EnrollmentsTab() {
 // 3. Courses
 // ==========================================
 function CoursesTab() {
-  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson, updateCourse, updateLesson, toggleCoursePublish } = useApp();
+  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson, updateCourse, updateLesson, toggleCoursePublish, reorderLesson } = useApp(); // 🔴 استدعاء دالة الترتيب
 
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
@@ -389,6 +387,9 @@ function CoursesTab() {
           const courseRevenue = courseEnrs.reduce((sum, e) => sum + Number(e.amount), 0);
           const isDraft = (course as any).isPublished === false;
 
+          // 🔴 بنرتب الدروس عشان أسهم النقل تشتغل صح
+          const sortedLessons = course.lessons ? [...course.lessons].sort((a, b) => a.order - b.order) : [];
+
           return (
             <div key={course.id} className={`overflow-hidden rounded-[2rem] border transition-all ${isDraft ? 'border-ink-200 bg-ink-50/50 grayscale-[20%] dark:border-white/5 dark:bg-white/5' : 'border-brand-200 bg-white/70 shadow-sm backdrop-blur-xl dark:border-brand-500/20 dark:bg-white/5'}`}>
               <div className="flex flex-col sm:flex-row gap-4 justify-between border-b border-ink-100 p-5 sm:p-6 dark:border-white/5">
@@ -520,17 +521,21 @@ function CoursesTab() {
 
               <div className="p-5 sm:p-6">
                 <h4 className="mb-3 text-sm font-bold text-ink-500 dark:text-ink-400">محتوى الكورس</h4>
-                {course.lessons && course.lessons.length > 0 ? (
-                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                    {course.lessons.map((lesson, idx) => (
+                {sortedLessons.length > 0 ? (
+                  <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    {sortedLessons.map((lesson, idx) => (
                       <div key={lesson.id} className="flex items-center justify-between rounded-xl border border-ink-100 bg-ink-50 p-3 shadow-sm dark:border-white/5 dark:bg-[#171a36]">
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-ink-500 dark:bg-ink-900"><PlayCircle className="h-4 w-4" /></div>
                           <span className="truncate text-sm font-bold text-ink-700 dark:text-ink-200">{idx + 1}. {lesson.title}</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => openEditLesson(course.id, lesson)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-md"><Edit3 className="h-4 w-4" /></button>
-                          <button onClick={() => { if (window.confirm('حذف المحتوى؟')) deleteLesson(course.id, lesson.id); }} className="text-red-500 hover:bg-red-100 p-1.5 rounded-md"><Trash2 className="h-4 w-4" /></button>
+                        {/* 🔴 أزرار الترتيب والتعديل والحذف المجمعة */}
+                        <div className="flex items-center gap-1 shrink-0 bg-white dark:bg-ink-900 rounded-lg shadow-sm border border-ink-200 dark:border-white/10 p-0.5">
+                          <button onClick={() => reorderLesson(course.id, lesson.id, 'up')} disabled={idx === 0} className="p-1.5 text-ink-400 hover:text-ink-900 disabled:opacity-30 dark:hover:text-white"><ArrowUp className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => reorderLesson(course.id, lesson.id, 'down')} disabled={idx === sortedLessons.length - 1} className="p-1.5 text-ink-400 hover:text-ink-900 disabled:opacity-30 dark:hover:text-white"><ArrowDown className="h-3.5 w-3.5" /></button>
+                          <div className="w-[1px] h-4 bg-ink-200 dark:bg-white/10 mx-1"></div>
+                          <button onClick={() => openEditLesson(course.id, lesson)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><Edit3 className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => { if (window.confirm('حذف المحتوى؟')) deleteLesson(course.id, lesson.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       </div>
                     ))}
@@ -566,13 +571,48 @@ function StudentsTab() {
     return Math.round((completed / course.lessons.length) * 100);
   };
 
+  // 🔴 الدالة السحرية لتصدير بيانات الطلاب لملف إكسل (CSV)
+  const handleExportExcel = () => {
+    if (filteredStudents.length === 0) {
+      alert("لا يوجد طلاب للتصدير!");
+      return;
+    }
+
+    // تجهيز البيانات
+    const dataToExport = filteredStudents.map(s => ({
+      "الاسم": s.name,
+      "رقم الموبايل": s.phone || 'غير مسجل',
+      "البريد الإلكتروني": s.email,
+      "تاريخ التسجيل": new Date(s.createdAt).toLocaleDateString('ar-EG')
+    }));
+
+    // تحويل البيانات لنص (CSV) مع إضافة BOM عشان الإكسل يقرا العربي صح
+    const headers = Object.keys(dataToExport[0]).join(',');
+    const rows = dataToExport.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const csvContent = "\uFEFF" + headers + '\n' + rows;
+
+    // تنزيل الملف
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `طلاب_المنصة_${new Date().toLocaleDateString('ar-EG')}.csv`;
+    link.click();
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">إدارة الطلاب</h2>
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
-          <input type="text" placeholder="ابحث بالاسم، الايميل، أو الموبايل..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-field w-full pr-10 py-3 sm:py-2.5" />
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          {/* 🔴 زرار التصدير لـ Excel */}
+          <button onClick={handleExportExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto rounded-xl bg-emerald-600 px-5 py-3 sm:py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 transition-colors">
+            <Download className="h-4 w-4" /> تصدير لـ Excel
+          </button>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
+            <input type="text" placeholder="ابحث بالاسم، الايميل، أو الموبايل..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-field w-full pr-10 py-3 sm:py-2.5" />
+          </div>
         </div>
       </div>
 

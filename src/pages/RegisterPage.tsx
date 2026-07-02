@@ -28,6 +28,13 @@ export function RegisterPage() {
       return;
     }
 
+    // 🔴 كود فحص رقم الموبايل المصري الصارم
+    const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
+    if (!egyptianPhoneRegex.test(form.phone)) {
+      setError('برجاء إدخال رقم هاتف مصري صحيح يتكون من 11 رقم (يبدأ بـ 010, 011, 012, أو 015)');
+      return;
+    }
+
     setLoading(true);
 
     const { error: supabaseError } = await supabase.auth.signUp({
@@ -107,9 +114,10 @@ export function RegisterPage() {
               <Phone className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
               <input
                 type="tel"
+                maxLength={11} // 🔴 منع كتابة أكثر من 11 رقم
                 required
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} // 🔴 منع الحروف والمسافات
                 placeholder="01xxxxxxxxx"
                 className="input pr-10"
                 dir="ltr"
