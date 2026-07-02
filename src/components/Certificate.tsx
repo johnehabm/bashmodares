@@ -62,23 +62,23 @@ export function Certificate({ studentName, courseTitle, onClose }: CertificatePr
                         className="absolute inset-0 z-0 h-full w-full object-cover"
                     />
 
-                    {/* 🔴 Layer 1: اسم الطالب (مفصول تماماً ومكانه ثابت من فوق) */}
-                    <div className="absolute left-0 top-[42%] z-10 w-full text-center">
-                        <h2 className="text-2xl font-black text-ink-900 sm:text-3xl md:text-5xl lg:text-6xl print:text-black">
+                    {/* 🔴 Layer 1: اسم الطالب (متمركز تماماً في النص) */}
+                    <div className="absolute left-0 top-[46%] z-10 w-full -translate-y-1/2 text-center">
+                        <h2 className="text-2xl font-black leading-none text-ink-900 sm:text-3xl md:text-5xl lg:text-6xl print:text-black">
                             {studentName}
                         </h2>
                     </div>
 
-                    {/* 🔴 Layer 2: اسم الكورس (مكانه ثابت من فوق ومش بيتأثر باسم الطالب) */}
-                    <div className="absolute left-0 top-[58%] z-10 w-full text-center">
-                        <h3 className="text-lg font-bold text-brand-600 sm:text-2xl md:text-3xl lg:text-4xl print:text-black">
+                    {/* 🔴 Layer 2: اسم الكورس (متمركز تماماً في النص) */}
+                    <div className="absolute left-0 top-[59%] z-10 w-full -translate-y-1/2 text-center">
+                        <h3 className="text-lg font-bold leading-none text-brand-600 sm:text-2xl md:text-3xl lg:text-4xl print:text-black">
                             {courseTitle}
                         </h3>
                     </div>
 
-                    {/* 🔴 Layer 3: التاريخ (مكانه ثابت من تحت وعلى الشمال) */}
-                    <div className="absolute bottom-[12%] left-[15%] z-10">
-                        <p className="text-xs font-bold text-ink-800 sm:text-lg md:text-xl lg:text-2xl print:text-black">
+                    {/* 🔴 Layer 3: التاريخ (متمركز تماماً) */}
+                    <div className="absolute bottom-[15%] left-[15%] z-10 translate-y-1/2">
+                        <p className="text-xs font-bold leading-none text-ink-800 sm:text-lg md:text-xl lg:text-2xl print:text-black">
                             {new Date().toLocaleDateString('ar-EG')}
                         </p>
                     </div>
