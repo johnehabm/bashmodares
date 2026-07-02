@@ -31,8 +31,6 @@ interface AppState {
   deleteAnnouncement: (id: string) => void;
   removeRejectedEnrollment: (enrollmentId: string) => void;
   resetStudentDevice: (userId: string) => void;
-
-  // 🔴 الدوال الجديدة للتعديل والمسودة
   updateCourse: (courseId: string, updates: any) => Promise<void>;
   updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
   toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
@@ -52,20 +50,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
+  // 🔴 الدمج السحري: خلينا جلب البيانات والتحقق من الدخول في مكان واحد 
   useEffect(() => {
+
+    // دالة جلب البيانات من الداتا بيز
     const loadRealData = async () => {
       const { data: dbCourses } = await supabase.from('courses').select('*');
       const { data: dbLessons } = await supabase.from('lessons').select('*').order('order', { ascending: true });
       const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
       const { data: dbUsers } = await supabase.from('users').select('*');
       const { data: dbEnrollments } = await supabase.from('enrollments').select('*');
-      const { data: dbProgress } = await supabase.from('progress').select('*');
+      const { data: dbProgress } = await supabase.from('progress').select('*'); // 👈 هيجيب التقدم بعد ما يتأكد من هويتك
 
       if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
       if (dbUsers) setUsers(dbUsers.map((u: any) => ({ id: String(u.id), name: u.name, email: u.email, phone: u.phone, role: u.role, password: u.password, activeDeviceId: u.active_device_id, createdAt: u.created_at } as User)));
 
       if (dbProgress) {
         setProgress(dbProgress.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
+      } else {
+        setProgress([]);
       }
 
       let formattedCourses: Course[] = [];
@@ -74,7 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
             id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
           })) : [];
-          return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: c.is_published ?? true } as any; // 👈 ضفنا isPublished هنا
+          return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: c.is_published ?? true } as any;
         });
         setCourses(formattedCourses);
       }
@@ -84,17 +87,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const relatedCourse = formattedCourses.find(c => c.id === String(e.course_id));
           return { id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at) } as any;
         }));
+      } else {
+        setEnrollments([]);
       }
     };
-    loadRealData();
-  }, []);
 
-  useEffect(() => {
+    // دالة فحص الدخول اللي بتشغل جلب البيانات
     const handleSession = async (session: any, event: string) => {
       setIsAuthLoading(true);
 
       if (!session) {
         setUser(null);
+        await loadRealData(); // يجيب الكورسات بس كزائر
         setIsAuthLoading(false);
         return;
       }
@@ -115,6 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbUser) {
         if (dbUser.role === 'admin') {
           setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
+          await loadRealData(); // 🔴 الأوامر دي بتضمن إن البيانات تيجي للمدير
         }
         else {
           if (!dbUser.active_device_id || event === 'SIGNED_IN') {
@@ -126,9 +131,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             alert("⚠️ تم تسجيل الدخول من جهاز آخر، لذلك تم إنهاء جلستك من هنا.");
             await supabase.auth.signOut();
             setUser(null);
+            await loadRealData();
           }
           else {
             setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
+            await loadRealData(); // 🔴 الأوامر دي بتضمن إن التقدم ييجي للطالب بعد ما يدخل
           }
         }
       }
@@ -137,9 +144,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data: { session } }) => handleSession(session, 'INITIAL_SESSION'));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { handleSession(session, event); });
+
     return () => subscription.unsubscribe();
   }, []);
 
+  // 🔴 المراقب الحي لطرد الجهاز القديم (شغال زي الفل)
   useEffect(() => {
     if (!user || user.role === 'admin') return;
     const localDeviceId = localStorage.getItem('bashmodares_device_id');
@@ -281,7 +290,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alert('تم فك ارتباط جهاز الطالب بنجاح!');
   };
 
-  // 🔴 الدوال الجديدة للتعديل والنشر
   const updateCourse: AppState['updateCourse'] = async (courseId, updates) => {
     await supabase.from('courses').update({
       title: updates.title, description: updates.description, stage: updates.stage,
@@ -315,7 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
     addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
-    updateCourse, updateLesson, toggleCoursePublish // 👈 إضافة الدوال للمركز الرئيسي
+    updateCourse, updateLesson, toggleCoursePublish
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
