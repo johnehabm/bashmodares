@@ -4,22 +4,21 @@ import { BookOpen, Filter, Search, PlayCircle, Users } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 
 export function CoursesPage() {
-  // استخدام قيمة افتراضية لحماية الصفحة لو الداتا لسه بتيجي
   const { courses } = useApp() || { courses: [] };
+
+  // 1. تعريف الكورسات المرئية (إلغاء المسودة)
   const visibleCourses = courses.filter((c: any) => c.isPublished !== false);
+
   const [filter, setFilter] = useState<'all' | 'primary' | 'preparatory' | 'secondary'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // حماية كاملة هنا: التأكد إن الكورسات عبارة عن مصفوفة سليمة
-  const safeCourses = Array.isArray(courses) ? courses : [];
+  // 🔴 2. التعديل السحري: استخدام (visibleCourses) بدل (courses)
+  const safeCourses = Array.isArray(visibleCourses) ? visibleCourses : [];
 
-  // فلترة الكورسات مع حماية ضد الـ (Undefined)
   const filteredCourses = safeCourses.filter((course) => {
-    if (!course) return false; // لو الكورس بايظ تجاهله
+    if (!course) return false;
 
     const matchStage = filter === 'all' || course.stage === filter;
-
-    // تأمين النصوص قبل البحث عشان نمنع الشاشة البيضاء
     const safeTitle = course.title || '';
     const safeSubject = course.subject || '';
 
@@ -31,16 +30,12 @@ export function CoursesPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 animate-fade-in">
-      {/* عنوان الصفحة */}
       <div className="mb-10 text-center">
         <h1 className="font-display text-4xl font-black text-ink-900 dark:text-white">الكورسات</h1>
         <p className="mt-2 text-ink-500 dark:text-ink-400">اختر الكورس المناسب لمرحلتك الدراسية</p>
       </div>
 
-      {/* الفلاتر والبحث */}
       <div className="mb-8 flex flex-col-reverse items-center justify-between gap-4 md:flex-row">
-
-        {/* مربع البحث */}
         <div className="relative w-full md:w-96">
           <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
           <input
@@ -52,10 +47,8 @@ export function CoursesPage() {
           />
         </div>
 
-        {/* أزرار الفلترة (شاملة الثانوي) */}
         <div className="flex w-full items-center justify-end gap-2 overflow-x-auto pb-2 md:w-auto md:pb-0" dir="rtl">
           <Filter className="ml-2 h-5 w-5 shrink-0 text-ink-400" />
-
           {[
             { id: 'all', label: 'الكل' },
             { id: 'primary', label: 'ابتدائي' },
@@ -76,7 +69,6 @@ export function CoursesPage() {
         </div>
       </div>
 
-      {/* شبكة الكورسات */}
       {filteredCourses.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredCourses.map((course) => (
@@ -102,24 +94,20 @@ export function CoursesPage() {
 
               <div className="flex flex-1 flex-col p-6">
                 <div className="mb-3 flex items-center justify-between">
-                  {/* إخفاء البادج لو المادة مش مكتوبة */}
                   {course.subject && (
                     <span className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-bold text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">
                       {course.subject}
                     </span>
                   )}
-                  {/* إخفاء الصف لو مش مكتوب */}
                   {course.grade && (
                     <span className="text-xs font-bold text-ink-500 dark:text-ink-400">
                       {course.grade}
                     </span>
                   )}
                 </div>
-
                 <h3 className="mb-2 text-lg font-black leading-tight text-ink-900 line-clamp-2 dark:text-white">
                   {course.title}
                 </h3>
-
                 <div className="mt-auto pt-4 flex items-center justify-between border-t border-ink-100 dark:border-white/10">
                   <div className="flex items-center gap-2 text-sm font-bold text-ink-600 dark:text-ink-300">
                     <Users className="h-4 w-4 text-ink-400" />

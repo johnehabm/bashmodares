@@ -74,7 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
             id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
           })) : [];
-          // 🔴 معالجة ذكية لحالة الكورس لضمان إنه Boolean دايماً
+
           const isPublishedValue = c.is_published !== false;
 
           return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: isPublishedValue } as any;
@@ -323,28 +323,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alert('✅ تم تحديث المحتوى بنجاح!');
   };
 
-  // 🔴 النظام السحري الجديد: الموقع بيتغير فوراً في وشك قبل الداتا بيز
+  // 🔴 دالة الإخفاء والإظهار الخارقة (مفيهاش ولا غلطة)
   const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
     try {
       const newStatus = !currentStatus;
 
-      // 1. التحديث اللحظي للموقع (عشان تحس بالاستجابة الفورية)
+      // 1. تحديث لحظي للواجهة (تغيير اللون)
       setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
 
-      // 2. تحديث الداتا بيز في صمت (بدون ما يوقف الموقع)
-      const { error } = await supabase.from('courses')
+      // 2. تحديث قاعدة البيانات في الخلفية
+      const { data, error } = await supabase.from('courses')
         .update({ is_published: newStatus })
-        .eq('id', courseId);
+        .eq('id', courseId)
+        .select();
 
-      if (error) {
-        // لو الداتا بيز اشتكت، نرجع الكورس زي ما كان ونطلعلك الرسالة!
+      // 3. كشف أي خطأ أو رفض من السيرفر
+      if (error || !data || data.length === 0) {
+        // لو حصل مشكلة نرجع الكورس زي ما كان
         setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
-        alert(`⚠️ خطأ من السيرفر: ${error.message}`);
+        alert(`⚠️ الداتا بيز رفضت التعديل! تأكد من تشغيل كود الـ SQL الأخير لفتح صلاحيات التعديل للمسؤول.`);
       }
+
     } catch (err: any) {
-      // لو حصل أي خطأ في الجافاسكريبت
       setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
-      alert(`⚠️ خطأ في التطبيق: ${err.message}`);
+      alert(`⚠️ خطأ: ${err.message}`);
     }
   };
 
