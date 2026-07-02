@@ -78,13 +78,14 @@ function OverviewTab() {
 // 2. Enrollments (تم تطوير التحديد والمسح المجمع) 🚀
 // ==========================================
 function EnrollmentsTab() {
-  const { enrollments, updateEnrollmentStatus, deleteEnrollments } = useApp(); // 🔴 استدعاء الدالة الجديدة
+  const { enrollments, updateEnrollmentStatus, deleteEnrollments } = useApp();
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]); // 🔴 سلة التحديد
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const filtered = enrollments.filter(e => filter === 'all' ? true : e.status === filter).reverse();
+  // 🔴 فلترة الإيصالات واستبعاد المؤرشف عشان ميظهرش في اللوحة!
+  const activeEnrollments = enrollments.filter((e: any) => !e.isArchived);
+  const filtered = activeEnrollments.filter((e: any) => filter === 'all' ? true : e.status === filter).reverse();
 
-  // 🔴 لتفريغ التحديد أول ما تغير الفلتر (عشان متسمحش حاجة بالغلط)
   useEffect(() => {
     setSelectedIds([]);
   }, [filter]);
@@ -98,12 +99,10 @@ function EnrollmentsTab() {
     }
   };
 
-  // 🔴 إضافة/إزالة إيصال واحد للسلة
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  // 🔴 زرار تحديد الكل
   const toggleSelectAll = () => {
     if (selectedIds.length === filtered.length) {
       setSelectedIds([]);
@@ -112,16 +111,16 @@ function EnrollmentsTab() {
     }
   };
 
-  // 🔴 زرار المسح الفعلي
+  // 🔴 رسالة ذكية تطمنك إن الكورس مش هيطير
   const handleBulkDelete = async () => {
     const isApprovedSelected = selectedIds.some(id => enrollments.find(e => e.id === id)?.status === 'approved');
     const msg = isApprovedSelected
-      ? `⚠️ تحذير خطير: من ضمن المحدد إيصالات "مقبولة"!\nمسحها سيلغي اشتراك هؤلاء الطلاب في الكورس فوراً.\n\nهل أنت متأكد من مسح (${selectedIds.length}) إيصال؟`
+      ? `سيتم مسح الإيصالات المرفوضة نهائياً، وسيتم (أرشفة) الإيصالات المقبولة وإخفائها من هنا مع مسح الصورة لتوفير المساحة (دون طرد الطلاب من الكورسات).\n\nهل أنت متأكد؟`
       : `هل أنت متأكد من مسح (${selectedIds.length}) إيصال نهائياً؟`;
 
     if (window.confirm(msg)) {
       await deleteEnrollments(selectedIds);
-      setSelectedIds([]); // تفريغ السلة بعد المسح
+      setSelectedIds([]);
     }
   };
 
@@ -131,7 +130,6 @@ function EnrollmentsTab() {
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">مراجعة الإيصالات</h2>
 
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          {/* 🔴 أزرار التحديد والمسح السريعة */}
           {filtered.length > 0 && (
             <div className="flex items-center gap-3 bg-white dark:bg-[#171a36] p-1.5 rounded-xl shadow-sm border border-ink-100 dark:border-white/5">
               <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-ink-700 dark:text-ink-300 px-3">
@@ -149,7 +147,7 @@ function EnrollmentsTab() {
                   onClick={handleBulkDelete}
                   className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-600 transition-colors shadow-md shadow-red-500/20"
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> حذف ({selectedIds.length})
+                  <Trash2 className="h-3.5 w-3.5" /> مسح / أرشفة ({selectedIds.length})
                 </button>
               )}
             </div>
@@ -184,7 +182,6 @@ function EnrollmentsTab() {
               <div key={enr.id} className={`flex flex-col rounded-[2rem] border p-4 sm:p-5 shadow-sm backdrop-blur-xl transition-all ${selectedIds.includes(enr.id) ? 'border-brand-500 bg-brand-50/30 dark:border-brand-500/50 dark:bg-brand-900/10' : 'border-ink-200 bg-white/70 dark:border-white/10 dark:bg-white/5'}`}>
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 overflow-hidden w-full">
-                    {/* 🔴 مربع التحديد جوه الكارت */}
                     <div className="pt-1 shrink-0">
                       <input
                         type="checkbox"

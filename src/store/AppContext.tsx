@@ -34,7 +34,7 @@ interface AppState {
   updateCourse: (courseId: string, updates: any) => Promise<void>;
   updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
   toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
-  deleteEnrollments: (ids: string[]) => Promise<void>; // 🔴 الدالة الجديدة للمسح المجمع
+  deleteEnrollments: (ids: string[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -86,7 +86,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbEnrollments) {
         setEnrollments(dbEnrollments.map((e: any) => {
           const relatedCourse = formattedCourses.find(c => c.id === String(e.course_id));
-          return { id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at) } as any;
+          return {
+            id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at),
+            isArchived: e.is_archived === true // 🔴 ربط حالة الأرشفة من الداتا بيز
+          } as any;
         }));
       } else {
         setEnrollments([]);
@@ -179,7 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const initialStatus = isFree ? 'approved' : 'pending';
     const { data: dbData } = await supabase.from('enrollments').insert({ student_id: user.id, student_name: user.name, course_id: data.courseId, status: initialStatus, receipt_url: data.receiptUrl || '', payment_method: data.paymentMethod || (isFree ? 'مجانياً' : ''), payment_account: data.paymentAccount || '' }).select();
     if (dbData && dbData.length > 0) {
-      setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title, status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at } as any]);
+      setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title, status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at, isArchived: false } as any]);
       alert(isFree ? "تم تفعيل الكورس المجاني بنجاح!" : "تم إرسال الإيصال بنجاح للمراجعة!");
     }
   };
@@ -190,7 +193,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!student || !course) return;
     const { data: dbData } = await supabase.from('enrollments').insert({ student_id: student.id, student_name: student.name, course_id: courseId, status: 'approved', receipt_url: '', payment_method: 'إضافة يدوية', payment_account: 'الإدارة' }).select();
     if (dbData && dbData.length > 0) {
-      setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: student.id, studentName: student.name, courseId: courseId, courseTitle: course.title, status: 'approved', receiptUrl: '', paymentMethod: 'إضافة يدوية', paymentAccount: 'الإدارة', amount: Number(course.price), createdAt: dbData[0].created_at } as any]);
+      setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: student.id, studentName: student.name, courseId: courseId, courseTitle: course.title, status: 'approved', receiptUrl: '', paymentMethod: 'إضافة يدوية', paymentAccount: 'الإدارة', amount: Number(course.price), createdAt: dbData[0].created_at, isArchived: false } as any]);
       alert(`تم إضافة الكورس بنجاح للطالب "${student.name}"`);
     }
   };
@@ -346,16 +349,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔴 الدالة الخارقة لمسح مجموعة من الإيصالات مع بعض
+  // 🔴 الدالة الخارقة للأرشفة والمسح الذكي
   const deleteEnrollments: AppState['deleteEnrollments'] = async (ids) => {
     try {
-      const { error } = await supabase.from('enrollments').delete().in('id', ids);
-      if (error) {
-        alert(`⚠️ حدث خطأ أثناء المسح: ${error.message}`);
-        return;
+      // فصلنا الإيصالات المرفوضة عن المقبولة
+      const enrollmentsToProcess = enrollments.filter(e => ids.includes(e.id));
+      const approvedIds = enrollmentsToProcess.filter(e => e.status === 'approved').map(e => e.id);
+      const otherIds = enrollmentsToProcess.filter(e => e.status !== 'approved').map(e => e.id);
+
+      // 1. مسح المرفوض/المعلق مسح نهائي من الداتا بيز
+      if (otherIds.length > 0) {
+        await supabase.from('enrollments').delete().in('id', otherIds);
       }
-      setEnrollments((prev) => prev.filter((e) => !ids.includes(e.id)));
-      alert('✅ تم مسح الإيصالات المحددة بنجاح!');
+
+      // 2. المقبول بيتعمله أرشفة ومسح لصورته فقط! (لحماية الكورس)
+      if (approvedIds.length > 0) {
+        await supabase.from('enrollments').update({ is_archived: true, receipt_url: '' }).in('id', approvedIds);
+      }
+
+      // تحديث السيستم قدامك عشان يختفوا
+      setEnrollments((prev) => prev.map(e => {
+        if (approvedIds.includes(e.id)) return { ...e, isArchived: true, receiptUrl: '' } as any;
+        return e;
+      }).filter(e => !otherIds.includes(e.id)));
+
+      alert('✅ تم تنظيف الإيصالات بنجاح! (تم أرشفة الإيصالات المقبولة لضمان بقاء الطلاب في الكورسات، وتم مسح المرفوض نهائياً).');
     } catch (err: any) {
       alert(`⚠️ خطأ: ${err.message}`);
     }
@@ -366,7 +384,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
     addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
-    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments // 👈 تم إضافتها هنا
+    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
