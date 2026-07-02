@@ -50,17 +50,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-  // 🔴 الدمج السحري: خلينا جلب البيانات والتحقق من الدخول في مكان واحد 
   useEffect(() => {
-
-    // دالة جلب البيانات من الداتا بيز
     const loadRealData = async () => {
       const { data: dbCourses } = await supabase.from('courses').select('*');
       const { data: dbLessons } = await supabase.from('lessons').select('*').order('order', { ascending: true });
       const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
       const { data: dbUsers } = await supabase.from('users').select('*');
       const { data: dbEnrollments } = await supabase.from('enrollments').select('*');
-      const { data: dbProgress } = await supabase.from('progress').select('*'); // 👈 هيجيب التقدم بعد ما يتأكد من هويتك
+      const { data: dbProgress } = await supabase.from('progress').select('*');
 
       if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
       if (dbUsers) setUsers(dbUsers.map((u: any) => ({ id: String(u.id), name: u.name, email: u.email, phone: u.phone, role: u.role, password: u.password, activeDeviceId: u.active_device_id, createdAt: u.created_at } as User)));
@@ -92,13 +89,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // دالة فحص الدخول اللي بتشغل جلب البيانات
     const handleSession = async (session: any, event: string) => {
       setIsAuthLoading(true);
 
       if (!session) {
         setUser(null);
-        await loadRealData(); // يجيب الكورسات بس كزائر
+        await loadRealData();
         setIsAuthLoading(false);
         return;
       }
@@ -119,7 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbUser) {
         if (dbUser.role === 'admin') {
           setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
-          await loadRealData(); // 🔴 الأوامر دي بتضمن إن البيانات تيجي للمدير
+          await loadRealData();
         }
         else {
           if (!dbUser.active_device_id || event === 'SIGNED_IN') {
@@ -135,7 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           else {
             setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
-            await loadRealData(); // 🔴 الأوامر دي بتضمن إن التقدم ييجي للطالب بعد ما يدخل
+            await loadRealData();
           }
         }
       }
@@ -148,7 +144,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🔴 المراقب الحي لطرد الجهاز القديم (شغال زي الفل)
   useEffect(() => {
     if (!user || user.role === 'admin') return;
     const localDeviceId = localStorage.getItem('bashmodares_device_id');
@@ -223,14 +218,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return isLessonComplete(lessons[idx - 1].id);
   };
 
+  // 🔴 إضافة كورس مع نظام كشف الأخطاء
   const addCourse: AppState['addCourse'] = async (courseData: any) => {
-    const { data } = await supabase.from('courses').insert({ title: courseData.title, description: courseData.description, stage: courseData.stage, grade: courseData.grade, subject: courseData.subject, instructor: courseData.instructor || 'مستر عماد', price: Number(courseData.price), image_url: courseData.coverImage, is_published: true }).select().single();
-    if (data) setCourses(prev => [...prev, { id: String(data.id), title: data.title, description: data.description, stage: data.stage, grade: data.grade, subject: data.subject, instructor: data.instructor, price: data.price, coverImage: data.image_url, imageUrl: data.image_url, lessons: [], createdAt: data.created_at, isPublished: true } as any]);
+    try {
+      const { data, error } = await supabase.from('courses').insert({
+        title: courseData.title,
+        description: courseData.description,
+        stage: courseData.stage,
+        grade: courseData.grade,
+        subject: courseData.subject,
+        instructor: courseData.instructor || 'مستر عماد',
+        price: Number(courseData.price),
+        image_url: courseData.coverImage,
+        is_published: true
+      }).select().single();
+
+      if (error) {
+        console.error("Supabase Error:", error);
+        alert(`⚠️ الداتا بيز رفضت إضافة الكورس!\nالسبب: ${error.message}`);
+        return;
+      }
+
+      if (data) {
+        setCourses(prev => [...prev, { id: String(data.id), title: data.title, description: data.description, stage: data.stage, grade: data.grade, subject: data.subject, instructor: data.instructor, price: data.price, coverImage: data.image_url, imageUrl: data.image_url, lessons: [], createdAt: data.created_at, isPublished: true } as any]);
+        alert("✅ تم إضافة الكورس بنجاح!");
+      }
+    } catch (err: any) {
+      alert(`⚠️ خطأ في الاتصال: ${err.message}`);
+    }
   };
 
   const addLesson: AppState['addLesson'] = async (courseId, lesson: any) => {
     const nextOrder = courses.find(c => c.id === courseId)?.lessons.length ? courses.find(c => c.id === courseId)!.lessons.length + 1 : 1;
-    const { data } = await supabase.from('lessons').insert({ course_id: courseId, title: lesson.title, video_url: lesson.videoUrl, order: nextOrder, type: lesson.type, passing_score: lesson.passingScore, questions: lesson.questions || [] }).select().single();
+    const { data, error } = await supabase.from('lessons').insert({ course_id: courseId, title: lesson.title, video_url: lesson.videoUrl, order: nextOrder, type: lesson.type, passing_score: lesson.passingScore, questions: lesson.questions || [] }).select().single();
+
+    if (error) {
+      alert(`⚠️ حدث خطأ أثناء إضافة المحتوى: ${error.message}`);
+      return;
+    }
+
     if (data) {
       const newLesson = { id: String(data.id), courseId: String(data.course_id), title: data.title, videoUrl: data.video_url, order: data.order, type: data.type, passingScore: data.passing_score, questions: data.questions };
       setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, lessons: [...c.lessons, newLesson as any] } : c));
@@ -290,31 +316,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alert('تم فك ارتباط جهاز الطالب بنجاح!');
   };
 
+  // 🔴 تعديل الكورس مع نظام كشف الأخطاء
   const updateCourse: AppState['updateCourse'] = async (courseId, updates) => {
-    await supabase.from('courses').update({
+    const { error } = await supabase.from('courses').update({
       title: updates.title, description: updates.description, stage: updates.stage,
       grade: updates.grade, price: Number(updates.price), image_url: updates.coverImage
     }).eq('id', courseId);
 
+    if (error) {
+      alert(`⚠️ خطأ في تعديل بيانات الكورس: ${error.message}`);
+      return;
+    }
+
     setCourses(prev => prev.map(c => c.id === courseId ? { ...c, ...updates, coverImage: updates.coverImage, imageUrl: updates.coverImage } : c));
-    alert('تم تحديث بيانات الكورس بنجاح!');
+    alert('✅ تم تحديث بيانات الكورس بنجاح!');
   };
 
   const updateLesson: AppState['updateLesson'] = async (courseId, lessonId, updates) => {
-    await supabase.from('lessons').update({
+    const { error } = await supabase.from('lessons').update({
       title: updates.title, video_url: updates.videoUrl, type: updates.type,
       passing_score: updates.passingScore, questions: updates.questions
     }).eq('id', lessonId);
 
+    if (error) {
+      alert(`⚠️ خطأ في تحديث المحتوى: ${error.message}`);
+      return;
+    }
+
     setCourses(prev => prev.map(c => c.id === courseId ? {
       ...c, lessons: c.lessons.map(l => l.id === lessonId ? { ...l, ...updates } : l)
     } : c));
-    alert('تم تحديث المحتوى بنجاح!');
+    alert('✅ تم تحديث المحتوى بنجاح!');
   };
 
+  // 🔴 إخفاء أو إظهار الكورس مع كشف الأخطاء
   const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
     const newStatus = !currentStatus;
-    await supabase.from('courses').update({ is_published: newStatus }).eq('id', courseId);
+    const { error } = await supabase.from('courses').update({ is_published: newStatus }).eq('id', courseId);
+
+    if (error) {
+      alert(`⚠️ حدث خطأ أثناء تغيير حالة الكورس: ${error.message}`);
+      return;
+    }
+
     setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
   };
 
