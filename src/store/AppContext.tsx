@@ -115,8 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
 
       if (!dbUser) {
-        const newUser = { id: session.user.id, name: session.user.user_metadata?.full_name || 'طالب جديد', email: session.user.email, role: 'student', active_device_id: localDeviceId };
-        await supabase.from('users').insert([newUser]);
+        const newUser = { id: session.user.id, name: session.user.user_metadata?.full_name || 'طالب جديد', email: session.user.email, role: 'student', active_device_id: localDeviceId }; await supabase.from('users').insert([newUser]);
         dbUser = newUser;
       }
 
