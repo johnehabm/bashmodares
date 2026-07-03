@@ -76,6 +76,9 @@ export function StudentDashboard() {
 
   if (!user) return null;
 
+  // 🔴 السطر السحري لاستبعاد الكورسات المخفية من الترشيحات
+  const visibleCourses = courses.filter((c: any) => c.isPublished !== false);
+
   const myEnrollments = enrollments.filter((e) => e.studentId === user.id);
   const approvedEnrollments = myEnrollments.filter((e) => e.status === 'approved');
   const pendingEnrollments = myEnrollments.filter((e) => e.status === 'pending');
@@ -280,7 +283,7 @@ export function StudentDashboard() {
             </h2>
           </Reveal>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {courses
+            {visibleCourses /* 🔴 استخدام الكورسات المرئية فقط هنا */
               .filter((c) => !myEnrollments.some((e) => e.courseId === c.id))
               .slice(0, 4)
               .map((course, idx) => (
