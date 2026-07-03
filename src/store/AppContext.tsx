@@ -35,7 +35,7 @@ interface AppState {
   updateLesson: (courseId: string, lessonId: string, updates: any) => Promise<void>;
   toggleCoursePublish: (courseId: string, currentStatus: boolean) => Promise<void>;
   deleteEnrollments: (ids: string[]) => Promise<void>;
-  reorderLesson: (courseId: string, lessonId: string, direction: 'up' | 'down') => Promise<void>; // 🔴 دالة الترتيب الجديدة
+  reorderLesson: (courseId: string, lessonId: string, direction: 'up' | 'down') => Promise<void>;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -253,12 +253,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 🔴 1. مسح الدرس (وتخزينه السحابي لو فيه صور كويز)
   const deleteLesson: AppState['deleteLesson'] = async (courseId, lessonId) => {
+    const course = courses.find(c => c.id === courseId);
+    const lesson = course?.lessons.find(l => l.id === lessonId);
+
+    // لو الدرس كويز وفيه صور، بنجمع روابطها ونمسحها
+    if (lesson && lesson.type === 'quiz' && lesson.questions) {
+      const pathsToDelete = lesson.questions
+        .map((q: any) => q.image)
+        .filter((img: string) => img && img.includes('supabase.co'))
+        .map((img: string) => img.split('/receipts/')[1])
+        .filter(Boolean);
+
+      if (pathsToDelete.length > 0) {
+        await supabase.storage.from('receipts').remove(pathsToDelete);
+      }
+    }
+
     await supabase.from('lessons').delete().eq('id', lessonId);
     setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, lessons: c.lessons.filter((l) => l.id !== lessonId) } : c));
   };
 
+  // 🔴 2. مسح الكورس بالكامل (بصور كويزاته وإيصالاته المرتبطة بيه)
   const deleteCourse: AppState['deleteCourse'] = async (courseId) => {
+    const course = courses.find(c => c.id === courseId);
+    let pathsToDelete: string[] = [];
+
+    // تجميع كل صور الأسئلة اللي في الكورس ده
+    course?.lessons?.forEach((l: any) => {
+      if (l.type === 'quiz' && l.questions) {
+        l.questions.forEach((q: any) => {
+          if (q.image && q.image.includes('supabase.co')) {
+            const path = q.image.split('/receipts/')[1];
+            if (path) pathsToDelete.push(path);
+          }
+        });
+      }
+    });
+
+    // تجميع كل صور الإيصالات الخاصة بالكورس ده
+    const courseEnrollments = enrollments.filter(e => e.courseId === courseId);
+    courseEnrollments.forEach(e => {
+      if (e.receiptUrl && e.receiptUrl.includes('supabase.co')) {
+        const path = e.receiptUrl.split('/receipts/')[1];
+        if (path) pathsToDelete.push(path);
+      }
+    });
+
+    // إرسال أمر المسح للـ Storage مرة واحدة
+    if (pathsToDelete.length > 0) {
+      await supabase.storage.from('receipts').remove(pathsToDelete);
+    }
+
     await supabase.from('lessons').delete().eq('course_id', courseId);
     await supabase.from('enrollments').delete().eq('course_id', courseId);
     await supabase.from('courses').delete().eq('id', courseId);
@@ -295,7 +342,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
   };
 
+  // 🔴 3. مسح إيصال واحد مرفوض (ومسح صورته من التخزين)
   const removeRejectedEnrollment: AppState['removeRejectedEnrollment'] = async (id) => {
+    const enrollment = enrollments.find(e => e.id === id);
+    if (enrollment && enrollment.receiptUrl && enrollment.receiptUrl.includes('supabase.co')) {
+      const path = enrollment.receiptUrl.split('/receipts/')[1];
+      if (path) await supabase.storage.from('receipts').remove([path]);
+    }
     await supabase.from('enrollments').delete().eq('id', id);
     setEnrollments((prev) => prev.filter((e) => e.id !== id));
   };
@@ -331,36 +384,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleCoursePublish: AppState['toggleCoursePublish'] = async (courseId, currentStatus) => {
     try {
       const newStatus = !currentStatus;
-
       setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: newStatus } : c));
-
-      const { data, error } = await supabase.from('courses')
-        .update({ is_published: newStatus })
-        .eq('id', courseId)
-        .select();
-
+      const { data, error } = await supabase.from('courses').update({ is_published: newStatus }).eq('id', courseId).select();
       if (error || !data || data.length === 0) {
         setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
         alert(`⚠️ الداتا بيز رفضت التعديل! تأكد من تشغيل كود الـ SQL الأخير لفتح صلاحيات التعديل للمسؤول.`);
       }
-
     } catch (err: any) {
       setCourses(prev => prev.map(c => c.id === courseId ? { ...c, isPublished: currentStatus } : c));
       alert(`⚠️ خطأ: ${err.message}`);
     }
   };
 
+  // 🔴 4. التحديث الجذري لمسح الإيصالات (عشان يمسح صورها من التخزين أوتوماتيك)
   const deleteEnrollments: AppState['deleteEnrollments'] = async (ids) => {
     try {
       const enrollmentsToProcess = enrollments.filter(e => ids.includes(e.id));
       const approvedIds = enrollmentsToProcess.filter(e => e.status === 'approved').map(e => e.id);
-      const otherIds = enrollmentsToProcess.filter(e => e.status !== 'approved').map(e => e.id);
+      const otherEnrollments = enrollmentsToProcess.filter(e => e.status !== 'approved');
+      const otherIds = otherEnrollments.map(e => e.id);
 
+      // مسح الإيصالات المرفوضة من التخزين وقاعدة البيانات
       if (otherIds.length > 0) {
+        const pathsToDelete = otherEnrollments
+          .map(e => e.receiptUrl)
+          .filter(url => url && url.includes('supabase.co'))
+          .map(url => url.split('/receipts/')[1])
+          .filter(Boolean);
+
+        if (pathsToDelete.length > 0) {
+          await supabase.storage.from('receipts').remove(pathsToDelete);
+        }
         await supabase.from('enrollments').delete().in('id', otherIds);
       }
 
+      // أرشفة الإيصالات المقبولة ومسح صورتها فقط لتوفير المساحة
       if (approvedIds.length > 0) {
+        const approvedData = enrollmentsToProcess.filter(e => e.status === 'approved');
+        const pathsToDelete = approvedData
+          .map(e => e.receiptUrl)
+          .filter(url => url && url.includes('supabase.co'))
+          .map(url => url.split('/receipts/')[1])
+          .filter(Boolean);
+
+        if (pathsToDelete.length > 0) {
+          await supabase.storage.from('receipts').remove(pathsToDelete);
+        }
         await supabase.from('enrollments').update({ is_archived: true, receipt_url: '' }).in('id', approvedIds);
       }
 
@@ -369,43 +438,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return e;
       }).filter(e => !otherIds.includes(e.id)));
 
-      alert('✅ تم تنظيف الإيصالات بنجاح! (تم أرشفة الإيصالات المقبولة لضمان بقاء الطلاب في الكورسات، وتم مسح المرفوض نهائياً).');
+      alert('✅ تم تنظيف الإيصالات بنجاح! (تم أرشفة الإيصالات المقبولة وحذف الباقي نهائياً مع تنظيف مساحة التخزين).');
     } catch (err: any) {
       alert(`⚠️ خطأ: ${err.message}`);
     }
   };
 
-  // 🔴 الدالة السحرية لترتيب الدروس
   const reorderLesson: AppState['reorderLesson'] = async (courseId, lessonId, direction) => {
     const course = courses.find(c => c.id === courseId);
     if (!course) return;
 
-    // بنرتب الدروس ترتيب سليم عشان نعرف مين فوق ومين تحت
     const lessonsList = [...course.lessons].sort((a, b) => a.order - b.order);
     const currentIndex = lessonsList.findIndex(l => l.id === lessonId);
-
     if (currentIndex === -1) return;
 
-    // بنحدد هنبدل مع مين (اللي فوقه ولا اللي تحته)
     let targetIndex = -1;
     if (direction === 'up' && currentIndex > 0) targetIndex = currentIndex - 1;
     if (direction === 'down' && currentIndex < lessonsList.length - 1) targetIndex = currentIndex + 1;
-
     if (targetIndex === -1) return;
 
     const currentLesson = lessonsList[currentIndex];
     const targetLesson = lessonsList[targetIndex];
 
-    // بنبدل رقم الترتيب
     const tempOrder = currentLesson.order;
     currentLesson.order = targetLesson.order;
     targetLesson.order = tempOrder;
 
-    // بنحدث الداتا بيز فورا
     await supabase.from('lessons').update({ order: currentLesson.order }).eq('id', currentLesson.id);
     await supabase.from('lessons').update({ order: targetLesson.order }).eq('id', targetLesson.id);
-
-    // تحديث الموقع عشان تحس بالسرعة
     setCourses(prev => prev.map(c => c.id === courseId ? { ...c, lessons: lessonsList } : c));
   };
 
@@ -414,7 +474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createEnrollment, updateEnrollmentStatus, markLessonComplete, isLessonComplete, isLessonUnlocked,
     addCourse, addLesson, deleteLesson, deleteCourse, resetStudentPassword, toggleStudentAccess,
     addAnnouncement, toggleAnnouncement, deleteAnnouncement, removeRejectedEnrollment, adminEnrollStudent, resetStudentDevice,
-    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments, reorderLesson // 👈 تم التصدير
+    updateCourse, updateLesson, toggleCoursePublish, deleteEnrollments, reorderLesson
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
