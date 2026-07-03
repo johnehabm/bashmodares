@@ -9,13 +9,13 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 
-// مكون الحماية السحري (بيطرد أي حد بيحاول يكسر القواعد)
+// مكون الحماية السحري 
 function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
   const { user } = useApp();
 
   // لو مش مسجل دخول، ارميه على صفحة تسجيل الدخول
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />; // 🔴 عدلناها لـ /login
   }
 
   // لو الصفحة دي للأدمن بس، والمستخدم ده مش أدمن، ارميه على الرئيسية
@@ -31,11 +31,14 @@ export default function App() {
     <AppProvider>
       <BrowserRouter>
         <Routes>
-          {/* 🔴 هنا الحل: Layout بقت جزء من الـ Route الأب عشان تشتغل صح مع الـ Outlet */}
           <Route element={<Layout />}>
 
             <Route path="/" element={<LandingPage />} />
+
+            {/* 🔴 ضفنا المسارين عشان لو أي زرار مكتوب فيه auth أو login يشتغل صح */}
             <Route path="/auth" element={<LoginPage />} />
+            <Route path="/login" element={<LoginPage />} />
+
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/courses/:courseId" element={<CourseDetailPage />} />
