@@ -76,9 +76,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
             id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
           })) : [];
-
           const isPublishedValue = c.is_published !== false;
-
           return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: isPublishedValue } as any;
         });
         setCourses(formattedCourses);
@@ -87,10 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbEnrollments) {
         setEnrollments(dbEnrollments.map((e: any) => {
           const relatedCourse = formattedCourses.find(c => c.id === String(e.course_id));
-          return {
-            id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at),
-            isArchived: e.is_archived === true
-          } as any;
+          return { id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at), isArchived: e.is_archived === true } as any;
         }));
       } else {
         setEnrollments([]);
@@ -115,13 +110,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
 
       if (!dbUser) {
-        const newUser = { id: session.user.id, name: session.user.user_metadata?.full_name || 'طالب جديد', email: session.user.email, role: 'student', active_device_id: localDeviceId }; await supabase.from('users').insert([newUser]);
+        const newUser = {
+          id: session.user.id,
+          name: session.user.user_metadata?.full_name || 'طالب جديد',
+          email: session.user.email,
+          phone: session.user.user_metadata?.phone_number || '',
+          role: 'student',
+          active_device_id: localDeviceId
+        };
+        await supabase.from('users').insert([newUser]);
         dbUser = newUser;
+      }
+
+      // 🔴 السلاح السري: المزامنة الإجبارية لرقم الموبايل
+      // ده بيحل المشكلة لو الداتا بيز بتنشئ الحساب أوتوماتيك وبتنسى تاخد رقم الموبايل
+      if (dbUser && !dbUser.phone && session.user.user_metadata?.phone_number) {
+        await supabase.from('users').update({ phone: session.user.user_metadata.phone_number }).eq('id', session.user.id);
+        dbUser.phone = session.user.user_metadata.phone_number;
       }
 
       if (dbUser) {
         if (dbUser.role === 'admin') {
-          setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
+          // ضفنا الموبايل هنا
+          setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, phone: dbUser.phone, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
           await loadRealData();
         }
         else {
@@ -137,7 +148,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await loadRealData();
           }
           else {
-            setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
+            // وضفناه هنا كمان
+            setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, phone: dbUser.phone, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
             await loadRealData();
           }
         }
@@ -160,7 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         setUser(null);
         alert("⚠️ تم تسجيل الدخول من حسابك في جهاز آخر. سيتم الخروج من هذه الجلسة الآن لحماية الحساب.");
-        window.location.href = '/auth';
+        window.location.href = '/login';
       }
     }, 10000);
     return () => clearInterval(interval);
@@ -252,34 +264,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔴 1. مسح الدرس (وتخزينه السحابي لو فيه صور كويز)
   const deleteLesson: AppState['deleteLesson'] = async (courseId, lessonId) => {
     const course = courses.find(c => c.id === courseId);
     const lesson = course?.lessons.find(l => l.id === lessonId);
-
-    // لو الدرس كويز وفيه صور، بنجمع روابطها ونمسحها
     if (lesson && lesson.type === 'quiz' && lesson.questions) {
-      const pathsToDelete = lesson.questions
-        .map((q: any) => q.image)
-        .filter((img: string) => img && img.includes('supabase.co'))
-        .map((img: string) => img.split('/receipts/')[1])
-        .filter(Boolean);
-
-      if (pathsToDelete.length > 0) {
-        await supabase.storage.from('receipts').remove(pathsToDelete);
-      }
+      const pathsToDelete = lesson.questions.map((q: any) => q.image).filter((img: string) => img && img.includes('supabase.co')).map((img: string) => img.split('/receipts/')[1]).filter(Boolean);
+      if (pathsToDelete.length > 0) { await supabase.storage.from('receipts').remove(pathsToDelete); }
     }
-
     await supabase.from('lessons').delete().eq('id', lessonId);
     setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, lessons: c.lessons.filter((l) => l.id !== lessonId) } : c));
   };
 
-  // 🔴 2. مسح الكورس بالكامل (بصور كويزاته وإيصالاته المرتبطة بيه)
   const deleteCourse: AppState['deleteCourse'] = async (courseId) => {
     const course = courses.find(c => c.id === courseId);
     let pathsToDelete: string[] = [];
-
-    // تجميع كل صور الأسئلة اللي في الكورس ده
     course?.lessons?.forEach((l: any) => {
       if (l.type === 'quiz' && l.questions) {
         l.questions.forEach((q: any) => {
@@ -290,8 +288,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     });
-
-    // تجميع كل صور الإيصالات الخاصة بالكورس ده
     const courseEnrollments = enrollments.filter(e => e.courseId === courseId);
     courseEnrollments.forEach(e => {
       if (e.receiptUrl && e.receiptUrl.includes('supabase.co')) {
@@ -299,12 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (path) pathsToDelete.push(path);
       }
     });
-
-    // إرسال أمر المسح للـ Storage مرة واحدة
-    if (pathsToDelete.length > 0) {
-      await supabase.storage.from('receipts').remove(pathsToDelete);
-    }
-
+    if (pathsToDelete.length > 0) { await supabase.storage.from('receipts').remove(pathsToDelete); }
     await supabase.from('lessons').delete().eq('course_id', courseId);
     await supabase.from('enrollments').delete().eq('course_id', courseId);
     await supabase.from('courses').delete().eq('id', courseId);
@@ -341,7 +332,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
   };
 
-  // 🔴 3. مسح إيصال واحد مرفوض (ومسح صورته من التخزين)
   const removeRejectedEnrollment: AppState['removeRejectedEnrollment'] = async (id) => {
     const enrollment = enrollments.find(e => e.id === id);
     if (enrollment && enrollment.receiptUrl && enrollment.receiptUrl.includes('supabase.co')) {
@@ -395,7 +385,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔴 4. التحديث الجذري لمسح الإيصالات (عشان يمسح صورها من التخزين أوتوماتيك)
   const deleteEnrollments: AppState['deleteEnrollments'] = async (ids) => {
     try {
       const enrollmentsToProcess = enrollments.filter(e => ids.includes(e.id));
@@ -403,7 +392,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const otherEnrollments = enrollmentsToProcess.filter(e => e.status !== 'approved');
       const otherIds = otherEnrollments.map(e => e.id);
 
-      // مسح الإيصالات المرفوضة من التخزين وقاعدة البيانات
       if (otherIds.length > 0) {
         const pathsToDelete = otherEnrollments
           .map(e => e.receiptUrl)
@@ -417,7 +405,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await supabase.from('enrollments').delete().in('id', otherIds);
       }
 
-      // أرشفة الإيصالات المقبولة ومسح صورتها فقط لتوفير المساحة
       if (approvedIds.length > 0) {
         const approvedData = enrollmentsToProcess.filter(e => e.status === 'approved');
         const pathsToDelete = approvedData
