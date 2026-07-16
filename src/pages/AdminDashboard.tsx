@@ -3,7 +3,7 @@ import {
   Users, BookOpen, Receipt, DollarSign, CheckCircle2, XCircle, Search, ShieldAlert,
   PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock, GraduationCap, Bell, LayoutDashboard,
   FileText, Brain, Save, Plus, Image as ImageIcon, Video, Link as LinkIcon, Upload, Target,
-  Edit3, EyeOff, Phone, ArrowUp, ArrowDown, Download // 🔴 ضفنا أيقونات الأسهم والتحميل
+  Edit3, EyeOff, Phone, ArrowUp, ArrowDown, Download
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { StatusBadge } from '../components/ui';
@@ -30,7 +30,7 @@ function OverviewTab() {
           { title: 'طلبات معلقة', value: pendingEnrollments.length, icon: Receipt, color: 'text-gold-600', bg: 'bg-gold-50' }
         ].map((stat, idx) => (
           <div key={idx} className="flex items-center gap-4 rounded-3xl sm:rounded-[2rem] border border-ink-200 bg-white/70 p-4 sm:p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
-            <div className={`flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl ${stat.bg} ${stat.color}`}>
+            <div className={`flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl ${stat.bg}${stat.color}`}>
               <stat.icon className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
             <div className="overflow-hidden">
@@ -248,7 +248,7 @@ function EnrollmentsTab() {
 // 3. Courses
 // ==========================================
 function CoursesTab() {
-  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson, updateCourse, updateLesson, toggleCoursePublish, reorderLesson } = useApp(); // 🔴 استدعاء دالة الترتيب
+  const { courses, enrollments, addCourse, addLesson, deleteCourse, deleteLesson, updateCourse, updateLesson, toggleCoursePublish, reorderLesson } = useApp();
 
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
@@ -344,7 +344,8 @@ function CoursesTab() {
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><BookOpen className="h-4 w-4 text-brand-500" /> اسم الكورس</label>
-                    <input required type="text" className="input-field w-full" value={newCourse.title} onChange={e => setNewCourse({ ...newCourse, title: e.target.value })} />
+                    {/* 🔴 إضافة dir="auto" واسم الكورس */}
+                    <input required type="text" dir="auto" className="input-field w-full text-start" value={newCourse.title} onChange={e => setNewCourse({ ...newCourse, title: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><DollarSign className="h-4 w-4 text-emerald-500" /> السعر (ج.م)</label>
@@ -368,7 +369,8 @@ function CoursesTab() {
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><FileText className="h-4 w-4 text-blue-500" /> وصف الكورس</label>
-                    <textarea required className="input-field min-h-[100px] w-full" value={newCourse.description} onChange={e => setNewCourse({ ...newCourse, description: e.target.value })} />
+                    {/* 🔴 إضافة dir="auto" لوصف الكورس */}
+                    <textarea required dir="auto" className="input-field min-h-[100px] w-full text-start" value={newCourse.description} onChange={e => setNewCourse({ ...newCourse, description: e.target.value })} />
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row justify-end gap-3 border-t border-ink-100 pt-6 dark:border-white/10">
@@ -387,7 +389,6 @@ function CoursesTab() {
           const courseRevenue = courseEnrs.reduce((sum, e) => sum + Number(e.amount), 0);
           const isDraft = (course as any).isPublished === false;
 
-          // 🔴 بنرتب الدروس عشان أسهم النقل تشتغل صح
           const sortedLessons = course.lessons ? [...course.lessons].sort((a, b) => a.order - b.order) : [];
 
           return (
@@ -403,7 +404,7 @@ function CoursesTab() {
 
                   <img src={course.coverImage} alt={course.title} className="w-full aspect-[2/1] sm:aspect-square sm:w-20 sm:h-20 rounded-2xl object-cover shadow-sm" />
                   <div className="flex flex-col justify-center">
-                    <h3 className="text-lg sm:text-xl font-bold text-ink-900 dark:text-white line-clamp-2">{course.title}</h3>
+                    <h3 dir="auto" className="text-lg sm:text-xl font-bold text-ink-900 dark:text-white line-clamp-2 text-start">{course.title}</h3>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm font-bold">
                       <span className="bg-brand-50 text-brand-700 px-2.5 py-1 rounded-md dark:bg-brand-900/30 dark:text-brand-300">السعر: {course.price}</span>
                       <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md dark:bg-emerald-900/30 dark:text-emerald-300">الأرباح: {courseRevenue}</span>
@@ -438,7 +439,8 @@ function CoursesTab() {
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-ink-600 dark:text-ink-300">عنوان المحتوى</label>
-                        <input required type="text" className="input-field w-full py-2.5" value={newLesson.title} onChange={e => setNewLesson({ ...newLesson, title: e.target.value })} />
+                        {/* 🔴 إضافة dir="auto" لعنوان الدرس */}
+                        <input required type="text" dir="auto" className="input-field w-full py-2.5 text-start" value={newLesson.title} onChange={e => setNewLesson({ ...newLesson, title: e.target.value })} />
                       </div>
 
                       <div className="space-y-1.5">
@@ -480,7 +482,8 @@ function CoursesTab() {
 
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="md:col-span-2">
-                                  <input required type="text" placeholder="اكتب نص السؤال..." className="input-field w-full font-bold py-3" value={q.text} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].text = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
+                                  {/* 🔴 إضافة dir="auto" لنص السؤال */}
+                                  <input required type="text" dir="auto" placeholder="اكتب نص السؤال..." className="input-field w-full font-bold py-3 text-start" value={q.text} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].text = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
                                 </div>
                                 <div className="md:col-span-2">
                                   <label className="mb-2 block text-xs font-bold text-ink-600 dark:text-ink-300">صورة توضيحية (اختياري)</label>
@@ -501,7 +504,8 @@ function CoursesTab() {
                                   {q.options.map((opt, optIdx) => (
                                     <div key={optIdx} className={`flex items-center gap-3 rounded-xl border p-2 pl-3 ${q.correctOptionIndex === optIdx ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-900/20' : 'border-ink-100 dark:border-white/5'}`}>
                                       <input type="radio" name={`correct-${qIdx}`} className="h-5 w-5 accent-emerald-600 shrink-0" checked={q.correctOptionIndex === optIdx} onChange={() => { const qs = [...newLesson.questions]; qs[qIdx].correctOptionIndex = optIdx; setNewLesson({ ...newLesson, questions: qs }); }} />
-                                      <input required type="text" placeholder={`الاختيار ${optIdx + 1}`} className="flex-1 w-full bg-transparent text-sm font-bold outline-none dark:text-white" value={opt} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].options[optIdx] = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
+                                      {/* 🔴 إضافة dir="auto" للاختيارات */}
+                                      <input required type="text" dir="auto" placeholder={`الاختيار ${optIdx + 1}`} className="flex-1 w-full bg-transparent text-sm font-bold outline-none dark:text-white text-start" value={opt} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].options[optIdx] = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
                                     </div>
                                   ))}
                                 </div>
@@ -527,9 +531,8 @@ function CoursesTab() {
                       <div key={lesson.id} className="flex items-center justify-between rounded-xl border border-ink-100 bg-ink-50 p-3 shadow-sm dark:border-white/5 dark:bg-[#171a36]">
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-ink-500 dark:bg-ink-900"><PlayCircle className="h-4 w-4" /></div>
-                          <span className="truncate text-sm font-bold text-ink-700 dark:text-ink-200">{idx + 1}. {lesson.title}</span>
+                          <span dir="auto" className="truncate text-sm font-bold text-ink-700 dark:text-ink-200 text-start">{idx + 1}. {lesson.title}</span>
                         </div>
-                        {/* 🔴 أزرار الترتيب والتعديل والحذف المجمعة */}
                         <div className="flex items-center gap-1 shrink-0 bg-white dark:bg-ink-900 rounded-lg shadow-sm border border-ink-200 dark:border-white/10 p-0.5">
                           <button onClick={() => reorderLesson(course.id, lesson.id, 'up')} disabled={idx === 0} className="p-1.5 text-ink-400 hover:text-ink-900 disabled:opacity-30 dark:hover:text-white"><ArrowUp className="h-3.5 w-3.5" /></button>
                           <button onClick={() => reorderLesson(course.id, lesson.id, 'down')} disabled={idx === sortedLessons.length - 1} className="p-1.5 text-ink-400 hover:text-ink-900 disabled:opacity-30 dark:hover:text-white"><ArrowDown className="h-3.5 w-3.5" /></button>
@@ -571,14 +574,12 @@ function StudentsTab() {
     return Math.round((completed / course.lessons.length) * 100);
   };
 
-  // 🔴 الدالة السحرية لتصدير بيانات الطلاب لملف إكسل (CSV)
   const handleExportExcel = () => {
     if (filteredStudents.length === 0) {
       alert("لا يوجد طلاب للتصدير!");
       return;
     }
 
-    // تجهيز البيانات
     const dataToExport = filteredStudents.map(s => ({
       "الاسم": s.name,
       "رقم الموبايل": s.phone || 'غير مسجل',
@@ -586,12 +587,10 @@ function StudentsTab() {
       "تاريخ التسجيل": new Date(s.createdAt).toLocaleDateString('ar-EG')
     }));
 
-    // تحويل البيانات لنص (CSV) مع إضافة BOM عشان الإكسل يقرا العربي صح
     const headers = Object.keys(dataToExport[0]).join(',');
     const rows = dataToExport.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
     const csvContent = "\uFEFF" + headers + '\n' + rows;
 
-    // تنزيل الملف
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -604,7 +603,6 @@ function StudentsTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white">إدارة الطلاب</h2>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-          {/* 🔴 زرار التصدير لـ Excel */}
           <button onClick={handleExportExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto rounded-xl bg-emerald-600 px-5 py-3 sm:py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 transition-colors">
             <Download className="h-4 w-4" /> تصدير لـ Excel
           </button>

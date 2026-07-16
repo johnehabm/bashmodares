@@ -32,7 +32,6 @@ const lessonIcon = (type: Lesson['type']) => {
 export function CourseDetailPage() {
   const { courseId = '' } = useParams();
 
-  // 🔴 ضفنا createEnrollment هنا عشان نستخدمها للكورسات المجانية
   const { courses, user, enrollments, isLessonComplete, isLessonUnlocked, createEnrollment } = useApp();
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
 
@@ -65,7 +64,8 @@ export function CourseDetailPage() {
       <div className="mb-6 flex items-center gap-2 text-sm text-ink-400">
         <Link to="/courses" className="hover:text-brand-600">الكورسات</Link>
         <ArrowRight className="h-3.5 w-3.5" />
-        <span className="font-bold text-ink-600 dark:text-ink-300">{course.title}</span>
+        {/* 🔴 دعم النص المزدوج في مسار التنقل */}
+        <span dir="auto" className="font-bold text-ink-600 dark:text-ink-300 text-start">{course.title}</span>
       </div>
 
       {/* Course header */}
@@ -75,8 +75,9 @@ export function CourseDetailPage() {
             <span className="badge bg-white/15 text-white backdrop-blur">
               {course.stage === 'primary' ? 'ابتدائي' : 'إعدادي'} · {course.grade}
             </span>
-            <h1 className="mt-3 font-display text-3xl font-900 sm:text-4xl">{course.title}</h1>
-            <p className="mt-3 max-w-2xl text-brand-100">{course.description}</p>
+            {/* 🔴 دعم النص المزدوج في اسم ووصف الكورس */}
+            <h1 dir="auto" className="mt-3 font-display text-3xl font-900 sm:text-4xl text-start">{course.title}</h1>
+            <p dir="auto" className="mt-3 max-w-2xl text-brand-100 text-start">{course.description}</p>
             <div className="mt-5 flex flex-wrap items-center gap-4 text-sm">
               <span className="flex items-center gap-1.5">
                 <GraduationCap className="h-4 w-4" /> {course.instructor}
@@ -108,7 +109,8 @@ export function CourseDetailPage() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-400 dark:bg-ink-800">
                     {lessonIcon(l.type)}
                   </div>
-                  <span className="flex-1 text-sm font-bold text-ink-600 dark:text-ink-300">
+                  {/* 🔴 دعم النص المزدوج للدروس المغلقة */}
+                  <span dir="auto" className="flex-1 text-sm font-bold text-ink-600 dark:text-ink-300 text-start">
                     {l.title}
                   </span>
                   <Lock className="h-4 w-4 text-ink-300 dark:text-ink-600" />
@@ -119,7 +121,6 @@ export function CourseDetailPage() {
           <div>
             <h2 className="mb-4 text-xl font-900 text-ink-900 dark:text-white">التسجيل</h2>
 
-            {/* 🔴 التعديل السحري: لو الكورس مجاني، نعرض زرار اشتراك مباشر بدون إيصال */}
             {Number(course.price) === 0 ? (
               <div className="card overflow-hidden p-0 text-center">
                 <div className="bg-brand-50 p-6 dark:bg-brand-900/10">
@@ -144,7 +145,6 @@ export function CourseDetailPage() {
                 </div>
               </div>
             ) : (
-              /* لو الكورس بفلوس، نعرض نافذة الإيصال العادية */
               <EnrollmentFlow courseId={course.id} price={course.price} />
             )}
           </div>
@@ -188,7 +188,8 @@ export function CourseDetailPage() {
           <div className="lg:col-span-2">
             {activeLesson ? (
               <div className="animate-fade-in">
-                <h2 className="mb-4 flex items-center gap-2 text-xl font-900 text-ink-900 dark:text-white">
+                {/* 🔴 دعم النص المزدوج لعنوان الدرس النشط */}
+                <h2 dir="auto" className="mb-4 flex items-center gap-2 text-xl font-900 text-ink-900 dark:text-white text-start">
                   {lessonIcon(activeLesson.type)}
                   {activeLesson.title}
                 </h2>
@@ -258,18 +259,18 @@ export function CourseDetailPage() {
                     onClick={() => unlocked && setActiveLessonId(l.id)}
                     disabled={!unlocked}
                     className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-right transition-all ${isActive
-                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
-                        : unlocked
-                          ? 'border-ink-200 bg-white hover:border-brand-300 dark:border-ink-800 dark:bg-ink-900'
-                          : 'border-ink-200 bg-ink-50 opacity-60 dark:border-ink-800 dark:bg-ink-900/50'
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
+                      : unlocked
+                        ? 'border-ink-200 bg-white hover:border-brand-300 dark:border-ink-800 dark:bg-ink-900'
+                        : 'border-ink-200 bg-ink-50 opacity-60 dark:border-ink-800 dark:bg-ink-900/50'
                       }`}
                   >
                     <div
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${complete
-                          ? 'bg-brand-600 text-white'
-                          : unlocked
-                            ? 'bg-ink-100 text-ink-600 dark:bg-ink-800 dark:text-ink-300'
-                            : 'bg-ink-100 text-ink-300 dark:bg-ink-800 dark:text-ink-600'
+                        ? 'bg-brand-600 text-white'
+                        : unlocked
+                          ? 'bg-ink-100 text-ink-600 dark:bg-ink-800 dark:text-ink-300'
+                          : 'bg-ink-100 text-ink-300 dark:bg-ink-800 dark:text-ink-600'
                         }`}
                     >
                       {complete ? (
@@ -281,7 +282,8 @@ export function CourseDetailPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`truncate text-sm font-bold ${unlocked ? 'text-ink-800 dark:text-ink-100' : 'text-ink-400'}`}>
+                      {/* 🔴 دعم النص المزدوج في قائمة الدروس الجانبية */}
+                      <p dir="auto" className={`truncate text-sm font-bold text-start ${unlocked ? 'text-ink-800 dark:text-ink-100' : 'text-ink-400'}`}>
                         {l.title}
                       </p>
                       <p className="text-xs text-ink-400">
@@ -314,7 +316,7 @@ export function CourseDetailPage() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-400 dark:bg-ink-800">
                     {lessonIcon(l.type)}
                   </div>
-                  <span className="flex-1 text-sm font-bold text-ink-600 dark:text-ink-300">{l.title}</span>
+                  <span dir="auto" className="flex-1 text-sm font-bold text-ink-600 dark:text-ink-300 text-start">{l.title}</span>
                   <Lock className="h-4 w-4 text-ink-300 dark:text-ink-600" />
                 </div>
               ))}
