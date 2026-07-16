@@ -257,9 +257,9 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             />
           </div>
 
-          {/* 🔴 دعم النص المزدوج لرأس السؤال */}
+          {/* 🔴 دعم النص المزدوج مع عزل (bdi) لرأس السؤال */}
           <h3 dir="auto" className="mt-5 text-xl font-black leading-relaxed text-ink-900 dark:text-white text-start">
-            {q.text}
+            <bdi>{q.text}</bdi>
           </h3>
 
           {q.image && (
@@ -292,7 +292,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                   key={optIdx}
                   onClick={() => handleAnswer(optIdx)}
                   disabled={selectedOption !== null}
-                  className={`group flex w-full items-center gap-4 rounded-xl border-2 px-5 py-4 text-right transition-all ${cls}`}
+                  // 🔴 تم إزالة text-right وإضافة text-start للزرار نفسه
+                  className={`group flex w-full items-center gap-4 rounded-xl border-2 px-5 py-4 text-start transition-all ${cls}`}
                 >
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black transition-colors ${selectedOption !== null && isCorrect ? 'bg-emerald-500 text-white' :
                     selectedOption !== null && isSelected ? 'bg-red-500 text-white' :
@@ -300,12 +301,12 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                     }`}>
                     {letters[optIdx] || optIdx + 1}
                   </span>
-                  {/* 🔴 دعم النص المزدوج للاختيارات */}
+                  {/* 🔴 دعم النص المزدوج مع عزل (bdi) للاختيارات */}
                   <span dir="auto" className={`flex-1 text-base font-bold text-start ${selectedOption !== null && isCorrect ? 'text-emerald-900 dark:text-emerald-100' :
                     selectedOption !== null && isSelected ? 'text-red-900 dark:text-red-100' :
                       'text-ink-800 dark:text-ink-100'
                     }`}>
-                    {optText}
+                    <bdi>{optText}</bdi>
                   </span>
                   {selectedOption !== null && isCorrect && <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />}
                   {selectedOption !== null && isSelected && !isCorrect && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">✕</span>}
@@ -388,9 +389,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                 style={{ backfaceVisibility: 'hidden' }}
               >
                 <span className="mb-4 inline-block rounded-full bg-brand-50 px-4 py-1.5 text-xs font-bold text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">السؤال</span>
-                {/* 🔴 دعم النص المزدوج للبطاقات (الوجه الأمامي) */}
                 <p dir="auto" className="text-xl font-black leading-relaxed text-ink-900 dark:text-white text-start">
-                  {cards[cardIdx].front}
+                  <bdi>{cards[cardIdx].front}</bdi>
                 </p>
               </div>
               <div
@@ -401,9 +401,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                 }}
               >
                 <span className="mb-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold text-white">الإجابة</span>
-                {/* 🔴 دعم النص المزدوج للبطاقات (الوجه الخلفي) */}
                 <p dir="auto" className="text-xl font-black leading-relaxed text-white text-start">
-                  {cards[cardIdx].back}
+                  <bdi>{cards[cardIdx].back}</bdi>
                 </p>
               </div>
             </div>
