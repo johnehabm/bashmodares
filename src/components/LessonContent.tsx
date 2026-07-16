@@ -122,10 +122,9 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const done = isLessonComplete(lesson.id);
   const [mode, setMode] = useState<'quiz' | 'flashcards'>('quiz');
 
-  // 🔴 معقم البيانات (Sanitizer): يضمن أن الأسئلة القديمة والجديدة تُقرأ بشكل صحيح دون حدوث انهيار (Crash)
+  // معقم البيانات (Sanitizer)
   const questions = useMemo(() => {
     return (lesson.questions || []).map((q: any, idx: number) => {
-      // تحويل الاختيارات إذا كانت من النوع القديم (Objects) إلى نصوص عادية
       const normalizedOptions = (q.options || []).map((opt: any) => {
         if (typeof opt === 'object' && opt !== null) {
           return opt.text || '';
@@ -133,7 +132,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         return String(opt);
       });
 
-      // استخراج الإجابة الصحيحة إذا كانت في النظام القديم
       let correctIdx = q.correctOptionIndex;
       if (correctIdx === undefined || correctIdx === null) {
         const foundIdx = (q.options || []).findIndex((o: any) => typeof o === 'object' && o.correct === true);
@@ -259,7 +257,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             />
           </div>
 
-          <h3 className="mt-5 text-xl font-black leading-relaxed text-ink-900 dark:text-white">
+          {/* 🔴 دعم النص المزدوج لرأس السؤال */}
+          <h3 dir="auto" className="mt-5 text-xl font-black leading-relaxed text-ink-900 dark:text-white text-start">
             {q.text}
           </h3>
 
@@ -296,14 +295,15 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                   className={`group flex w-full items-center gap-4 rounded-xl border-2 px-5 py-4 text-right transition-all ${cls}`}
                 >
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black transition-colors ${selectedOption !== null && isCorrect ? 'bg-emerald-500 text-white' :
-                      selectedOption !== null && isSelected ? 'bg-red-500 text-white' :
-                        'bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-600 dark:bg-ink-800 dark:text-ink-400'
+                    selectedOption !== null && isSelected ? 'bg-red-500 text-white' :
+                      'bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-600 dark:bg-ink-800 dark:text-ink-400'
                     }`}>
                     {letters[optIdx] || optIdx + 1}
                   </span>
-                  <span className={`flex-1 text-base font-bold ${selectedOption !== null && isCorrect ? 'text-emerald-900 dark:text-emerald-100' :
-                      selectedOption !== null && isSelected ? 'text-red-900 dark:text-red-100' :
-                        'text-ink-800 dark:text-ink-100'
+                  {/* 🔴 دعم النص المزدوج للاختيارات */}
+                  <span dir="auto" className={`flex-1 text-base font-bold text-start ${selectedOption !== null && isCorrect ? 'text-emerald-900 dark:text-emerald-100' :
+                    selectedOption !== null && isSelected ? 'text-red-900 dark:text-red-100' :
+                      'text-ink-800 dark:text-ink-100'
                     }`}>
                     {optText}
                   </span>
@@ -388,7 +388,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                 style={{ backfaceVisibility: 'hidden' }}
               >
                 <span className="mb-4 inline-block rounded-full bg-brand-50 px-4 py-1.5 text-xs font-bold text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">السؤال</span>
-                <p className="text-xl font-black leading-relaxed text-ink-900 dark:text-white">
+                {/* 🔴 دعم النص المزدوج للبطاقات (الوجه الأمامي) */}
+                <p dir="auto" className="text-xl font-black leading-relaxed text-ink-900 dark:text-white text-start">
                   {cards[cardIdx].front}
                 </p>
               </div>
@@ -400,7 +401,8 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
                 }}
               >
                 <span className="mb-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold text-white">الإجابة</span>
-                <p className="text-xl font-black leading-relaxed text-white">
+                {/* 🔴 دعم النص المزدوج للبطاقات (الوجه الخلفي) */}
+                <p dir="auto" className="text-xl font-black leading-relaxed text-white text-start">
                   {cards[cardIdx].back}
                 </p>
               </div>
