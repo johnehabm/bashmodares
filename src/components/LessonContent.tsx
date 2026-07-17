@@ -150,7 +150,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showResult, setShowResult] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
   const cards = (lesson as any).flashcards ?? [];
   const [cardIdx, setCardIdx] = useState(0);
@@ -175,15 +174,13 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const passed = scorePercent >= passingScore;
 
   const handleAnswer = (optionIdx: number) => {
-    if (selectedOption !== null || !q) return;
-    setSelectedOption(optionIdx);
+    // تمكين الطالب من تغيير إجابته قبل الانتقال للسؤال التالي
     setAnswers((prev) => ({ ...prev, [q.qId]: optionIdx }));
   };
 
   const nextQuestion = () => {
     if (current < questions.length - 1) {
       setCurrent((c) => c + 1);
-      setSelectedOption(null);
     } else {
       setShowResult(true);
       if (passed) {
@@ -196,7 +193,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
     setCurrent(0);
     setAnswers({});
     setShowResult(false);
-    setSelectedOption(null);
   };
 
   const nextCard = () => {
@@ -236,7 +232,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         )}
       </div>
 
-      {/* Quiz Mode */}
+      {/* Quiz Mode - شاشة الاختبار بدون عرض الصح والغلط */}
       {mode === 'quiz' && questions.length > 0 && q && !showResult && (
         <div className="rounded-[2rem] border border-ink-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171a36] sm:p-8">
           <div className="mb-4 flex items-center justify-between">
@@ -257,7 +253,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             />
           </div>
 
-          {/* 🔴 دعم النص المزدوج مع عزل (bdi) لرأس السؤال */}
           <h3 dir="auto" className="mt-5 text-xl font-black leading-relaxed text-ink-900 dark:text-white text-start">
             <bdi>{q.text}</bdi>
           </h3>
@@ -274,48 +269,31 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
 
           <div className="mt-8 space-y-3">
             {q.options.map((optText: string, optIdx: number) => {
-              const isCorrect = q.correctOptionIndex === optIdx;
-              const isSelected = selectedOption === optIdx;
-              const letters = ['أ', 'ب', 'ج', 'د'];
+              const isSelected = answers[q.qId] === optIdx;
+              const letters = ['A', 'B', 'C', 'D']; // 🔴 الحروف الإنجليزية
 
-              let cls = 'border-ink-200 bg-white hover:border-brand-300 dark:border-white/10 dark:bg-ink-900/50';
-              if (selectedOption !== null) {
-                if (isCorrect)
-                  cls = 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-900/20';
-                else if (isSelected)
-                  cls = 'border-red-500 bg-red-50 dark:border-red-500/50 dark:bg-red-900/20';
-                else cls = 'border-ink-200 bg-white opacity-50 dark:border-white/10 dark:bg-ink-900/50';
-              }
+              const cls = isSelected
+                ? 'border-brand-500 bg-brand-50 dark:border-brand-500/50 dark:bg-brand-900/20'
+                : 'border-ink-200 bg-white hover:border-brand-300 dark:border-white/10 dark:bg-ink-900/50';
 
               return (
                 <button
                   key={optIdx}
                   onClick={() => handleAnswer(optIdx)}
-                  disabled={selectedOption !== null}
-                  // 🔴 تم إزالة text-right وإضافة text-start للزرار نفسه
                   className={`group flex w-full items-center gap-4 rounded-xl border-2 px-5 py-4 text-start transition-all ${cls}`}
                 >
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black transition-colors ${selectedOption !== null && isCorrect ? 'bg-emerald-500 text-white' :
-                    selectedOption !== null && isSelected ? 'bg-red-500 text-white' :
-                      'bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-600 dark:bg-ink-800 dark:text-ink-400'
-                    }`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black transition-colors ${isSelected ? 'bg-brand-500 text-white' : 'bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-600 dark:bg-ink-800 dark:text-ink-400'}`}>
                     {letters[optIdx] || optIdx + 1}
                   </span>
-                  {/* 🔴 دعم النص المزدوج مع عزل (bdi) للاختيارات */}
-                  <span dir="auto" className={`flex-1 text-base font-bold text-start ${selectedOption !== null && isCorrect ? 'text-emerald-900 dark:text-emerald-100' :
-                    selectedOption !== null && isSelected ? 'text-red-900 dark:text-red-100' :
-                      'text-ink-800 dark:text-ink-100'
-                    }`}>
+                  <span dir="auto" className={`flex-1 text-base font-bold text-start ${isSelected ? 'text-brand-900 dark:text-brand-100' : 'text-ink-800 dark:text-ink-100'}`}>
                     <bdi>{optText}</bdi>
                   </span>
-                  {selectedOption !== null && isCorrect && <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />}
-                  {selectedOption !== null && isSelected && !isCorrect && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">✕</span>}
                 </button>
               );
             })}
           </div>
 
-          {(selectedOption !== null) && (
+          {(answers[q.qId] !== undefined) && (
             <button onClick={nextQuestion} className="btn-primary mt-8 w-full py-3.5 text-base">
               {current < questions.length - 1 ? 'تأكيد والانتقال للسؤال التالي' : 'إنهاء وعرض النتيجة'}
             </button>
@@ -323,9 +301,9 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         </div>
       )}
 
-      {/* Result Mode */}
+      {/* Result Mode - شاشة النتيجة ومراجعة الإجابات */}
       {mode === 'quiz' && showResult && (
-        <div className="flex flex-col items-center justify-center rounded-[2rem] border border-ink-200 bg-white p-10 text-center shadow-sm dark:border-white/10 dark:bg-[#171a36] animate-in zoom-in duration-500">
+        <div className="flex flex-col items-center justify-center rounded-[2rem] border border-ink-200 bg-white p-6 sm:p-10 text-center shadow-sm dark:border-white/10 dark:bg-[#171a36] animate-in zoom-in duration-500">
           <div
             className={`mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] ${passed
               ? 'bg-emerald-50 text-emerald-500 shadow-[0_0_40px_-10px_#10b981] dark:bg-emerald-500/10'
@@ -353,20 +331,65 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             </div>
           </div>
 
+          {/* 🔴 قسم مراجعة الإجابات الجديد */}
+          <div className="mt-10 w-full border-t border-ink-200 pt-8 dark:border-white/10">
+            <h4 className="mb-6 text-xl font-black text-ink-900 dark:text-white text-start">مراجعة الإجابات</h4>
+            <div className="space-y-6">
+              {questions.map((reviewQ, idx) => {
+                const userAnswer = answers[reviewQ.qId];
+                return (
+                  <div key={idx} className="rounded-2xl border border-ink-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink-900/50 text-start">
+                    <p className="mb-4 text-lg font-bold text-ink-900 dark:text-white flex items-start gap-2">
+                      <span className="text-brand-600 mt-0.5">{idx + 1}.</span>
+                      <bdi>{reviewQ.text}</bdi>
+                    </p>
+                    <div className="space-y-3">
+                      {reviewQ.options.map((optText: string, optIdx: number) => {
+                        const isCorrect = reviewQ.correctOptionIndex === optIdx;
+                        const isSelected = userAnswer === optIdx;
+                        const letters = ['A', 'B', 'C', 'D'];
+
+                        let cls = 'border-ink-100 bg-ink-50 opacity-60 dark:border-white/5 dark:bg-ink-900/30';
+                        if (isCorrect) {
+                          cls = 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-900/20 ring-1 ring-emerald-500';
+                        } else if (isSelected && !isCorrect) {
+                          cls = 'border-red-500 bg-red-50 dark:border-red-500/50 dark:bg-red-900/20';
+                        }
+
+                        return (
+                          <div key={optIdx} className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 ${cls}`}>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${isCorrect ? 'bg-emerald-500 text-white' : isSelected && !isCorrect ? 'bg-red-500 text-white' : 'bg-ink-200 text-ink-600 dark:bg-ink-800 dark:text-ink-400'}`}>
+                              {letters[optIdx] || optIdx + 1}
+                            </span>
+                            <span dir="auto" className={`flex-1 text-sm font-bold text-start ${isCorrect ? 'text-emerald-900 dark:text-emerald-100' : isSelected && !isCorrect ? 'text-red-900 dark:text-red-100' : 'text-ink-600 dark:text-ink-400'}`}>
+                              <bdi>{optText}</bdi>
+                            </span>
+                            {isCorrect && <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+                            {isSelected && !isCorrect && <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">✕</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {passed && !done && (
-            <p className="mt-6 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+            <p className="mt-8 text-sm font-bold text-emerald-600 dark:text-emerald-400">
               تم تسجيل إكمالك للدرس بنجاح، يمكنك الانتقال للدرس التالي.
             </p>
           )}
 
-          <button onClick={restart} className="btn-primary mt-8 py-3 px-8">
+          <button onClick={restart} className="btn-primary mt-6 py-3 px-8">
             <RotateCcw className="mr-2 h-5 w-5" />
             إعادة الاختبار
           </button>
         </div>
       )}
 
-      {/* Flashcards Mode (للأنظمة القديمة) */}
+      {/* Flashcards Mode */}
       {mode === 'flashcards' && cards.length > 0 && (
         <div className="space-y-4">
           <div className="text-center text-sm font-bold text-ink-500 dark:text-ink-400">
