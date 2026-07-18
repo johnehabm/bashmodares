@@ -52,46 +52,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-  useEffect(() => {
-    const loadRealData = async () => {
-      const { data: dbCourses } = await supabase.from('courses').select('*');
-      const { data: dbLessons } = await supabase.from('lessons').select('*').order('order', { ascending: true });
-      const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
-      const { data: dbUsers } = await supabase.from('users').select('*');
-      const { data: dbEnrollments } = await supabase.from('enrollments').select('*');
-      const { data: dbProgress } = await supabase.from('progress').select('*');
+  // 🔴 الدالة دي بقت ذكية ومحمية 100%
+  const loadRealData = async (currentUser?: User) => {
+    // 1. الداتا العامة اللي أي حد يشوفها (الكورسات والدروس والإشعارات)
+    const { data: dbCourses } = await supabase.from('courses').select('*');
+    const { data: dbLessons } = await supabase.from('secure_lessons').select('*').order('order', { ascending: true }); const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
 
-      if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
-      if (dbUsers) setUsers(dbUsers.map((u: any) => ({ id: String(u.id), name: u.name, email: u.email, phone: u.phone, role: u.role, password: u.password, activeDeviceId: u.active_device_id, createdAt: u.created_at } as User)));
+    if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
 
-      if (dbProgress) {
-        setProgress(dbProgress.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
-      } else {
-        setProgress([]);
+    let role = currentUser?.role || 'guest';
+    let userId = currentUser?.id;
+    let myEnrollmentsData: any[] = [];
+
+    // 2. سحب البيانات الحساسة بناءً على الصلاحية
+    if (role === 'admin') {
+      const [uRes, eRes, pRes] = await Promise.all([
+        supabase.from('users').select('*'),
+        supabase.from('enrollments').select('*'),
+        supabase.from('progress').select('*')
+      ]);
+      if (uRes.data) setUsers(uRes.data.map((u: any) => ({ id: String(u.id), name: u.name, email: u.email, phone: u.phone, role: u.role, password: u.password, activeDeviceId: u.active_device_id, createdAt: u.created_at } as User)));
+      if (eRes.data) {
+        myEnrollmentsData = eRes.data;
       }
+      if (pRes.data) setProgress(pRes.data.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
+    } else if (role === 'student' && userId) {
+      setUsers([]); // الطالب ملوش دعوة ببيانات باقي الطلاب
+      const [eRes, pRes] = await Promise.all([
+        supabase.from('enrollments').select('*').eq('student_id', userId),
+        supabase.from('progress').select('*').eq('user_id', userId)
+      ]);
+      if (eRes.data) myEnrollmentsData = eRes.data;
+      if (pRes.data) setProgress(pRes.data.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
+    } else {
+      setUsers([]);
+      myEnrollmentsData = [];
+      setProgress([]);
+    }
 
-      let formattedCourses: Course[] = [];
-      if (dbCourses) {
-        formattedCourses = dbCourses.map((c: any) => {
-          const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
-            id: String(l.id), courseId: String(l.course_id), title: l.title || '', description: l.description || '', videoUrl: l.video_url || '', order: l.order || 1, type: l.type || 'video', passingScore: l.passing_score || 50, questions: l.questions || []
-          })) : [];
-          const isPublishedValue = c.is_published !== false;
-          return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: isPublishedValue } as any;
-        });
-        setCourses(formattedCourses);
-      }
+    // 3. فلترة الكورسات وتشفير فيديوهات الكورسات غير المدفوعة
+    let formattedCourses: Course[] = [];
+    if (dbCourses) {
+      formattedCourses = dbCourses.map((c: any) => {
+        const isEnrolledAndApproved = myEnrollmentsData.some(e => String(e.course_id) === String(c.id) && e.status === 'approved');
+        const isFree = Number(c.price) === 0;
+        const canViewContent = role === 'admin' || isFree || isEnrolledAndApproved;
 
-      if (dbEnrollments) {
-        setEnrollments(dbEnrollments.map((e: any) => {
+        const courseLessons = dbLessons ? dbLessons.filter(l => String(l.course_id) === String(c.id)).map(l => ({
+          id: String(l.id),
+          courseId: String(l.course_id),
+          title: l.title || '',
+          description: l.description || '',
+          // 🔴 السر هنا: لو مش دافع، اللينك بيتمسح تماماً من الـ State
+          videoUrl: canViewContent ? (l.video_url || '') : '',
+          order: l.order || 1,
+          type: l.type || 'video',
+          passingScore: l.passing_score || 50,
+          questions: canViewContent ? (l.questions || []) : []
+        })) : [];
+
+        const isPublishedValue = c.is_published !== false;
+        return { id: String(c.id), title: String(c.title || ''), description: String(c.description || ''), stage: c.stage || 'secondary', grade: String(c.grade || ''), subject: String(c.subject || ''), instructor: String(c.instructor || 'مستر عماد'), price: Number(c.price) || 0, coverImage: String(c.image_url || ''), imageUrl: String(c.image_url || ''), lessons: courseLessons as any, createdAt: String(c.created_at || new Date().toISOString()), isPublished: isPublishedValue } as any;
+      });
+      setCourses(formattedCourses);
+
+      if (myEnrollmentsData.length > 0) {
+        setEnrollments(myEnrollmentsData.map((e: any) => {
           const relatedCourse = formattedCourses.find(c => c.id === String(e.course_id));
           return { id: String(e.id), studentId: String(e.student_id), studentName: e.student_name, courseId: String(e.course_id), courseTitle: relatedCourse?.title || 'كورس محذوف', status: e.status, receiptUrl: String(e.receipt_url || ''), paymentMethod: String(e.payment_method || ''), paymentAccount: String(e.payment_account || ''), amount: relatedCourse?.price || 0, createdAt: String(e.created_at), isArchived: e.is_archived === true } as any;
         }));
       } else {
         setEnrollments([]);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     const handleSession = async (session: any, event: string) => {
       setIsAuthLoading(true);
 
@@ -110,30 +146,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let { data: dbUser } = await supabase.from('users').select('*').eq('id', session.user.id).single();
 
       if (!dbUser) {
-        const newUser = {
-          id: session.user.id,
-          name: session.user.user_metadata?.full_name || 'طالب جديد',
-          email: session.user.email,
-          phone: session.user.user_metadata?.phone_number || '',
-          role: 'student',
-          active_device_id: localDeviceId
-        };
+        const newUser = { id: session.user.id, name: session.user.user_metadata?.full_name || 'طالب جديد', email: session.user.email, phone: session.user.user_metadata?.phone_number || '', role: 'student', active_device_id: localDeviceId };
         await supabase.from('users').insert([newUser]);
         dbUser = newUser;
       }
 
-      // 🔴 السلاح السري: المزامنة الإجبارية لرقم الموبايل
-      // ده بيحل المشكلة لو الداتا بيز بتنشئ الحساب أوتوماتيك وبتنسى تاخد رقم الموبايل
       if (dbUser && !dbUser.phone && session.user.user_metadata?.phone_number) {
         await supabase.from('users').update({ phone: session.user.user_metadata.phone_number }).eq('id', session.user.id);
         dbUser.phone = session.user.user_metadata.phone_number;
       }
 
       if (dbUser) {
+        const currentUserData = { id: session.user.id, name: dbUser.name, email: dbUser.email, phone: dbUser.phone, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User;
+
         if (dbUser.role === 'admin') {
-          // ضفنا الموبايل هنا
-          setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, phone: dbUser.phone, role: dbUser.role, activeDeviceId: dbUser.active_device_id, createdAt: dbUser.created_at } as User);
-          await loadRealData();
+          setUser(currentUserData);
+          await loadRealData(currentUserData);
         }
         else {
           if (!dbUser.active_device_id || event === 'SIGNED_IN') {
@@ -148,9 +176,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await loadRealData();
           }
           else {
-            // وضفناه هنا كمان
-            setUser({ id: session.user.id, name: dbUser.name, email: dbUser.email, phone: dbUser.phone, role: dbUser.role, activeDeviceId: localDeviceId, createdAt: dbUser.created_at } as User);
-            await loadRealData();
+            const updatedUser = { ...currentUserData, activeDeviceId: localDeviceId } as any;
+            setUser(updatedUser);
+            await loadRealData(updatedUser);
           }
         }
       }
@@ -196,6 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (dbData && dbData.length > 0) {
       setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title, status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at, isArchived: false } as any]);
       alert(isFree ? "تم تفعيل الكورس المجاني بنجاح!" : "تم إرسال الإيصال بنجاح للمراجعة!");
+      if (isFree) window.location.reload(); // ريفريش لجلب محتوى الكورس المجاني
     }
   };
 
