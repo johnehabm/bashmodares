@@ -56,7 +56,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadRealData = async (currentUser?: User) => {
     // 1. الداتا العامة اللي أي حد يشوفها (الكورسات والدروس والإشعارات)
     const { data: dbCourses } = await supabase.from('courses').select('*');
-    const { data: dbLessons } = await supabase.from('secure_lessons').select('*').order('order', { ascending: true }); const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+    const { data: dbLessons } = await supabase.from('secure_lessons').select('*').order('order', { ascending: true });
+    const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
 
     if (dbAnnouncements) setAnnouncements(dbAnnouncements.map((a: any) => ({ id: String(a.id), text: a.text, active: a.active, createdAt: String(a.created_at) })));
 
@@ -194,7 +195,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || user.role === 'admin') return;
     const localDeviceId = localStorage.getItem('bashmodares_device_id');
-    const interval = setInterval(async () => {
+
+    // الدالة اللي بتشيك على الجهاز
+    const checkDevice = async () => {
       const { data } = await supabase.from('users').select('active_device_id').eq('id', user.id).single();
       if (data && data.active_device_id && data.active_device_id !== localDeviceId) {
         await supabase.auth.signOut();
@@ -202,8 +205,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         alert("⚠️ تم تسجيل الدخول من حسابك في جهاز آخر. سيتم الخروج من هذه الجلسة الآن لحماية الحساب.");
         window.location.href = '/login';
       }
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+
+    // 1. فحص هادي كل 5 دقايق (يوفر الكوتة جداً)
+    const interval = setInterval(checkDevice, 5 * 60 * 1000);
+
+    // 2. فحص ذكي: أول ما الطالب يفتح التاب بتاعت الموقع أو يرجع للمتصفح
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkDevice();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user]);
 
   useEffect(() => {
