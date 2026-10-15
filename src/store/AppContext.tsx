@@ -52,9 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-  // 🔴 الدالة دي بقت ذكية ومحمية 100%
   const loadRealData = async (currentUser?: User) => {
-    // 1. الداتا العامة اللي أي حد يشوفها (الكورسات والدروس والإشعارات)
     const { data: dbCourses } = await supabase.from('courses').select('*');
     const { data: dbLessons } = await supabase.from('secure_lessons').select('*').order('order', { ascending: true });
     const { data: dbAnnouncements } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
@@ -65,7 +63,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let userId = currentUser?.id;
     let myEnrollmentsData: any[] = [];
 
-    // 2. سحب البيانات الحساسة بناءً على الصلاحية
     if (role === 'admin') {
       const [uRes, eRes, pRes] = await Promise.all([
         supabase.from('users').select('*'),
@@ -78,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (pRes.data) setProgress(pRes.data.map((p: any) => ({ userId: String(p.user_id), lessonId: String(p.lesson_id), courseId: String(p.course_id), completed: p.completed, quizScore: p.quiz_score, completedAt: String(p.completed_at) })));
     } else if (role === 'student' && userId) {
-      setUsers([]); // الطالب ملوش دعوة ببيانات باقي الطلاب
+      setUsers([]);
       const [eRes, pRes] = await Promise.all([
         supabase.from('enrollments').select('*').eq('student_id', userId),
         supabase.from('progress').select('*').eq('user_id', userId)
@@ -91,7 +88,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProgress([]);
     }
 
-    // 3. فلترة الكورسات وتشفير فيديوهات الكورسات غير المدفوعة
     let formattedCourses: Course[] = [];
     if (dbCourses) {
       formattedCourses = dbCourses.map((c: any) => {
@@ -104,11 +100,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           courseId: String(l.course_id),
           title: l.title || '',
           description: l.description || '',
-          // 🔴 السر هنا: لو مش دافع، اللينك بيتمسح تماماً من الـ State
           videoUrl: canViewContent ? (l.video_url || '') : '',
           order: l.order || 1,
           type: l.type || 'video',
           passingScore: l.passing_score || 50,
+          timeLimit: l.time_limit || 0, // 🔴 تمت الإضافة
+          allowRetake: l.allow_retake !== false, // 🔴 تمت الإضافة
           questions: canViewContent ? (l.questions || []) : []
         })) : [];
 
@@ -196,7 +193,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user || user.role === 'admin') return;
     const localDeviceId = localStorage.getItem('bashmodares_device_id');
 
-    // الدالة اللي بتشيك على الجهاز
     const checkDevice = async () => {
       const { data } = await supabase.from('users').select('active_device_id').eq('id', user.id).single();
       if (data && data.active_device_id && data.active_device_id !== localDeviceId) {
@@ -207,10 +203,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // 1. فحص هادي كل 5 دقايق (يوفر الكوتة جداً)
     const interval = setInterval(checkDevice, 5 * 60 * 1000);
 
-    // 2. فحص ذكي: أول ما الطالب يفتح التاب بتاعت الموقع أو يرجع للمتصفح
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         checkDevice();
@@ -242,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (dbData && dbData.length > 0) {
       setEnrollments((prev) => [...prev, { id: String(dbData[0].id), studentId: user.id, studentName: user.name, courseId: data.courseId, courseTitle: course.title, status: initialStatus, receiptUrl: data.receiptUrl || '', paymentMethod: data.paymentMethod, paymentAccount: data.paymentAccount, amount: Number(course.price), createdAt: dbData[0].created_at, isArchived: false } as any]);
       alert(isFree ? "تم تفعيل الكورس المجاني بنجاح!" : "تم إرسال الإيصال بنجاح للمراجعة!");
-      if (isFree) window.location.reload(); // ريفريش لجلب محتوى الكورس المجاني
+      if (isFree) window.location.reload();
     }
   };
 
@@ -303,10 +297,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addLesson: AppState['addLesson'] = async (courseId, lesson: any) => {
     const nextOrder = courses.find(c => c.id === courseId)?.lessons.length ? courses.find(c => c.id === courseId)!.lessons.length + 1 : 1;
-    const { data, error } = await supabase.from('lessons').insert({ course_id: courseId, title: lesson.title, video_url: lesson.videoUrl, order: nextOrder, type: lesson.type, passing_score: lesson.passingScore, questions: lesson.questions || [] }).select().single();
+    const { data, error } = await supabase.from('lessons').insert({
+      course_id: courseId,
+      title: lesson.title,
+      video_url: lesson.videoUrl,
+      order: nextOrder,
+      type: lesson.type,
+      passing_score: lesson.passingScore,
+      time_limit: lesson.timeLimit || 0, // 🔴 تمت الإضافة
+      allow_retake: lesson.allowRetake !== false, // 🔴 تمت الإضافة
+      questions: lesson.questions || []
+    }).select().single();
     if (error) { alert(`⚠️ خطأ في المحتوى: ${error.message}`); return; }
     if (data) {
-      const newLesson = { id: String(data.id), courseId: String(data.course_id), title: data.title, videoUrl: data.video_url, order: data.order, type: data.type, passingScore: data.passing_score, questions: data.questions };
+      const newLesson = {
+        id: String(data.id),
+        courseId: String(data.course_id),
+        title: data.title,
+        videoUrl: data.video_url,
+        order: data.order,
+        type: data.type,
+        passingScore: data.passing_score,
+        timeLimit: data.time_limit || 0, // 🔴 تمت الإضافة
+        allowRetake: data.allow_retake !== false, // 🔴 تمت الإضافة
+        questions: data.questions
+      };
       setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, lessons: [...c.lessons, newLesson as any] } : c));
     }
   };
@@ -409,7 +424,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateLesson: AppState['updateLesson'] = async (courseId, lessonId, updates) => {
     const { error } = await supabase.from('lessons').update({
       title: updates.title, video_url: updates.videoUrl, type: updates.type,
-      passing_score: updates.passingScore, questions: updates.questions
+      passing_score: updates.passingScore,
+      time_limit: updates.timeLimit || 0, // 🔴 تمت الإضافة
+      allow_retake: updates.allowRetake !== false, // 🔴 تمت الإضافة
+      questions: updates.questions
     }).eq('id', lessonId);
 
     if (error) { alert(`⚠️ خطأ في تحديث المحتوى: ${error.message}`); return; }
