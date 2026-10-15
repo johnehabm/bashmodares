@@ -121,15 +121,14 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const done = isLessonComplete(lesson.id);
   const [mode, setMode] = useState<'quiz' | 'flashcards'>('quiz');
 
-  // التحقق مما إذا كان الطالب قدم المحاولة سابقاً
+  // استخراج سجل الطالب في هذا الامتحان بالذات
   const studentProgress = useMemo(() => {
     return progress.find(p => p.lessonId === lesson.id && (p.userId === user?.id || (p as any).studentId === user?.id));
   }, [progress, lesson.id, user]);
 
-  const allowRetake = (lesson as any).allowRetake !== false; // القيمة الافتراضية مسموح للإعادة
-  const timeLimitInMinutes = (lesson as any).timeLimit || 0; // بالدقائق
+  const allowRetake = (lesson as any).allowRetake !== false;
+  const timeLimitInMinutes = (lesson as any).timeLimit || 0;
 
-  // معقم البيانات
   const questions = useMemo(() => {
     return (lesson.questions || []).map((q: any, idx: number) => {
       const normalizedOptions = (q.options || []).map((opt: any) => {
@@ -158,19 +157,21 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showResult, setShowResult] = useState(false);
 
-  // منطق التايمر (Timer)
+  // التايمر
   const [timeLeft, setTimeLeft] = useState<number>(timeLimitInMinutes * 60);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
+  // تشغيل التايمر لأول مرة
   useEffect(() => {
-    if (timeLimitInMinutes > 0 && mode === 'quiz' && !showResult && !done) {
+    if (timeLimitInMinutes > 0 && mode === 'quiz' && !showResult && !studentProgress) {
       setTimeLeft(timeLimitInMinutes * 60);
       setIsTimerRunning(true);
     } else {
       setIsTimerRunning(false);
     }
-  }, [timeLimitInMinutes, mode, showResult, done]);
+  }, [timeLimitInMinutes, mode, showResult, studentProgress]);
 
+  // تحديث التايمر كل ثانية
   useEffect(() => {
     if (!isTimerRunning || timeLeft <= 0) return;
 
@@ -178,10 +179,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setIsTimerRunning(false);
-          // انتهاء الوقت وتسليم الإجابات أوتوماتيكياً
-          alert('انتهى وقت الاختبار! تم تسليم إجاباتك تلقائياً.');
-          setShowResult(true);
           return 0;
         }
         return prev - 1;
@@ -189,9 +186,27 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isTimerRunning, timeLeft]);
+  }, [isTimerRunning]);
 
-  // تحويل الثواني إلى mm:ss
+  // حساب النتيجة
+  const score = questions.reduce((acc, qq) => {
+    return acc + (answers[qq.qId] === qq.correctOptionIndex ? 1 : 0);
+  }, 0);
+  const scorePercent = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+  const passingScore = lesson.passingScore || 50;
+  const passed = scorePercent >= passingScore;
+
+  // التعامل مع انتهاء الوقت أوتوماتيكياً
+  useEffect(() => {
+    if (timeLeft === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+      alert('انتهى وقت الاختبار! تم تسليم إجاباتك تلقائياً.');
+      setShowResult(true);
+      // 🔴 إجبار النظام على حفظ المحاولة حتى لو سقط عشان يقفل عليه الإعادة
+      markLessonComplete(lesson.id, lesson.courseId, scorePercent);
+    }
+  }, [timeLeft, isTimerRunning, lesson.id, lesson.courseId, scorePercent, markLessonComplete]);
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -205,20 +220,12 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   if (questions.length === 0 && cards.length === 0) {
     return (
       <div className="rounded-[2rem] border border-ink-200 bg-white p-8 text-center text-ink-500 shadow-sm dark:border-white/10 dark:bg-[#171a36] dark:text-ink-400">
-        لا يوجد محتوى لهذا الاختبار بعد. سيقوم المعلم بإضافة الأسئلة قريباً.
+        لا يوجد محتوى لهذا الاختبار بعد.
       </div>
     );
   }
 
   const q = questions[current];
-
-  const score = questions.reduce((acc, qq) => {
-    return acc + (answers[qq.qId] === qq.correctOptionIndex ? 1 : 0);
-  }, 0);
-
-  const scorePercent = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
-  const passingScore = lesson.passingScore || 50;
-  const passed = scorePercent >= passingScore;
 
   const handleAnswer = (optionIdx: number) => {
     setAnswers((prev) => ({ ...prev, [q.qId]: optionIdx }));
@@ -230,14 +237,13 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
     } else {
       setShowResult(true);
       setIsTimerRunning(false);
-      if (passed) {
-        markLessonComplete(lesson.id, lesson.courseId, scorePercent);
-      }
+      // 🔴 إجبار النظام على حفظ النتيجة في جميع الحالات (نجاح أو سقوط)
+      markLessonComplete(lesson.id, lesson.courseId, scorePercent);
     }
   };
 
   const restart = () => {
-    if (!allowRetake && (done || studentProgress)) {
+    if (!allowRetake && studentProgress) {
       alert('غير مسموح بإعادة هذا الاختبار بناءً على تعليمات المعلم.');
       return;
     }
@@ -259,9 +265,9 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
     setCardIdx((i) => (i - 1 + cards.length) % cards.length);
   };
 
-  // 🔴 منع الطالب من أداء الامتحان لو المدرس قافل الإعادة وقدمه قبل كده
-  if (!allowRetake && (done || studentProgress) && !showResult) {
-    const prevScore = studentProgress?.score ?? (done ? 100 : 0);
+  // 🔴 منع الطالب من الدخول للامتحان لو المدرس قافل الإعادة
+  if (!allowRetake && studentProgress && !showResult) {
+    const prevScore = studentProgress.quizScore ?? (done ? 100 : 0);
     return (
       <div className="flex flex-col items-center justify-center rounded-[2rem] border border-amber-200 bg-amber-50/50 p-8 text-center shadow-sm dark:border-amber-900/50 dark:bg-amber-900/10">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
@@ -274,7 +280,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
           هذا الاختبار متاح للمحاولة مرة واحدة فقط بحسب تعليمات المعلم، وقد قمت بأدائه مسبقاً.
         </p>
         <div className="mt-6 rounded-xl bg-white px-6 py-3 font-black text-amber-900 shadow-sm dark:bg-ink-900 dark:text-amber-200">
-          درجتك السابقة: {prevScore}%
+          درجتك المحفوظة: {prevScore}%
         </div>
       </div>
     );
@@ -282,34 +288,20 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Mode toggle */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-2">
           {questions.length > 0 && cards.length > 0 && (
             <>
-              <button
-                onClick={() => setMode('quiz')}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'quiz'
-                  ? 'bg-brand-600 text-white shadow-md'
-                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
-                  }`}
-              >
+              <button onClick={() => setMode('quiz')} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'quiz' ? 'bg-brand-600 text-white shadow-md' : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'}`}>
                 <Brain className="h-4 w-4" /> اختبار
               </button>
-              <button
-                onClick={() => setMode('flashcards')}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'flashcards'
-                  ? 'bg-brand-600 text-white shadow-md'
-                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
-                  }`}
-              >
+              <button onClick={() => setMode('flashcards')} className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'flashcards' ? 'bg-brand-600 text-white shadow-md' : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'}`}>
                 <Layers className="h-4 w-4" /> بطاقات مراجعة
               </button>
             </>
           )}
         </div>
 
-        {/* 🔴 عرض التايمر التنازلي للمشاهدة */}
         {mode === 'quiz' && timeLimitInMinutes > 0 && !showResult && (
           <div className={`flex items-center gap-2 rounded-xl border px-4 py-2 font-mono text-base font-black transition-colors ${timeLeft < 60 ? 'animate-pulse border-red-500 bg-red-50 text-red-600 dark:bg-red-900/30' : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400'}`}>
             <Clock className="h-5 w-5" />
@@ -318,7 +310,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         )}
       </div>
 
-      {/* Quiz Mode */}
       {mode === 'quiz' && questions.length > 0 && q && !showResult && (
         <div className="rounded-[2rem] border border-ink-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171a36] sm:p-8">
           <div className="mb-4 flex items-center justify-between">
@@ -345,11 +336,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
 
           {q.image && (
             <div className="mt-6 flex w-full justify-center overflow-hidden rounded-2xl border border-ink-100 bg-ink-50 p-2 dark:border-white/5 dark:bg-ink-900/30">
-              <img
-                src={q.image}
-                alt="توضيح للسؤال"
-                className="max-h-[350px] w-full rounded-xl object-contain shadow-sm"
-              />
+              <img src={q.image} alt="توضيح للسؤال" className="max-h-[350px] w-full rounded-xl object-contain shadow-sm" />
             </div>
           )}
 
@@ -357,10 +344,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             {q.options.map((optText: string, optIdx: number) => {
               const isSelected = answers[q.qId] === optIdx;
               const letters = ['A', 'B', 'C', 'D'];
-
-              const cls = isSelected
-                ? 'border-brand-500 bg-brand-50 dark:border-brand-500/50 dark:bg-brand-900/20'
-                : 'border-ink-200 bg-white hover:border-brand-300 dark:border-white/10 dark:bg-ink-900/50';
+              const cls = isSelected ? 'border-brand-500 bg-brand-50 dark:border-brand-500/50 dark:bg-brand-900/20' : 'border-ink-200 bg-white hover:border-brand-300 dark:border-white/10 dark:bg-ink-900/50';
 
               return (
                 <button
@@ -387,15 +371,9 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         </div>
       )}
 
-      {/* Result Mode */}
       {mode === 'quiz' && showResult && (
         <div className="flex flex-col items-center justify-center rounded-[2rem] border border-ink-200 bg-white p-6 sm:p-10 text-center shadow-sm dark:border-white/10 dark:bg-[#171a36] animate-in zoom-in duration-500">
-          <div
-            className={`mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] ${passed
-              ? 'bg-emerald-50 text-emerald-500 shadow-[0_0_40px_-10px_#10b981] dark:bg-emerald-500/10'
-              : 'bg-red-50 text-red-500 shadow-[0_0_40px_-10px_#ef4444] dark:bg-red-500/10'
-              }`}
-          >
+          <div className={`mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] ${passed ? 'bg-emerald-50 text-emerald-500 shadow-[0_0_40px_-10px_#10b981] dark:bg-emerald-500/10' : 'bg-red-50 text-red-500 shadow-[0_0_40px_-10px_#ef4444] dark:bg-red-500/10'}`}>
             <Award className="h-12 w-12" />
           </div>
           <h3 className="text-3xl font-black text-ink-900 dark:text-white">
@@ -417,7 +395,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             </div>
           </div>
 
-          {/* مراجعة الإجابات */}
           <div className="mt-10 w-full border-t border-ink-200 pt-8 dark:border-white/10">
             <h4 className="mb-6 text-xl font-black text-ink-900 dark:text-white text-start">مراجعة الإجابات</h4>
             <div className="space-y-6">
@@ -471,7 +448,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         </div>
       )}
 
-      {/* Flashcards Mode */}
       {mode === 'flashcards' && cards.length > 0 && (
         <div className="space-y-4">
           <div className="text-center text-sm font-bold text-ink-500 dark:text-ink-400">
