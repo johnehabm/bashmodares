@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Users, BookOpen, Receipt, DollarSign, CheckCircle2, XCircle, Search, ShieldAlert,
   PlayCircle, PlusCircle, Trash2, Eye, Lock, Unlock, GraduationCap, Bell, LayoutDashboard,
   FileText, Brain, Save, Plus, Image as ImageIcon, Video, Link as LinkIcon, Upload, Target,
-  Edit3, EyeOff, Phone, ArrowUp, ArrowDown, Download
+  Edit3, EyeOff, Phone, ArrowUp, ArrowDown, Download, Award, Clock, RotateCcw
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { StatusBadge } from '../components/ui';
@@ -258,8 +258,8 @@ function CoursesTab() {
 
   const [newCourse, setNewCourse] = useState({ title: '', description: '', stage: 'primary', grade: '', subject: '', price: '', coverImage: '' });
   const [newLesson, setNewLesson] = useState<{
-    title: string; videoUrl: string; type: string; passingScore: number; questions: { text: string; image?: string; options: string[]; correctOptionIndex: number }[];
-  }>({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] });
+    title: string; videoUrl: string; type: string; passingScore: number; timeLimit: number; allowRetake: boolean; questions: { text: string; image?: string; options: string[]; correctOptionIndex: number }[];
+  }>({ title: '', videoUrl: '', type: 'video', passingScore: 50, timeLimit: 0, allowRetake: true, questions: [] });
 
   const [uploadingImageIdx, setUploadingImageIdx] = useState<number | null>(null);
 
@@ -282,7 +282,7 @@ function CoursesTab() {
   };
 
   const openEditLesson = (courseId: string, lesson: any) => {
-    setNewLesson({ title: lesson.title, videoUrl: lesson.videoUrl, type: lesson.type, passingScore: lesson.passingScore || 50, questions: lesson.questions || [] });
+    setNewLesson({ title: lesson.title, videoUrl: lesson.videoUrl, type: lesson.type, passingScore: lesson.passingScore || 50, timeLimit: lesson.timeLimit || 0, allowRetake: lesson.allowRetake !== false, questions: lesson.questions || [] });
     setAddingLessonTo(courseId);
     setEditingLessonId(lesson.id);
   };
@@ -298,7 +298,7 @@ function CoursesTab() {
     } else {
       addLesson(courseId, newLesson);
     }
-    setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] });
+    setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, timeLimit: 0, allowRetake: true, questions: [] });
     setAddingLessonTo(null);
     setEditingLessonId(null);
   };
@@ -344,7 +344,6 @@ function CoursesTab() {
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><BookOpen className="h-4 w-4 text-brand-500" /> اسم الكورس</label>
-                    {/* 🔴 إضافة dir="auto" واسم الكورس */}
                     <input required type="text" dir="auto" className="input-field w-full text-start" value={newCourse.title} onChange={e => setNewCourse({ ...newCourse, title: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
@@ -369,7 +368,6 @@ function CoursesTab() {
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="flex items-center gap-2 text-sm font-bold text-ink-700 dark:text-ink-300"><FileText className="h-4 w-4 text-blue-500" /> وصف الكورس</label>
-                    {/* 🔴 إضافة dir="auto" لوصف الكورس */}
                     <textarea required dir="auto" className="input-field min-h-[100px] w-full text-start" value={newCourse.description} onChange={e => setNewCourse({ ...newCourse, description: e.target.value })} />
                   </div>
                 </div>
@@ -420,7 +418,7 @@ function CoursesTab() {
                   <button onClick={() => openEditCourse(course)} title="تعديل بيانات الكورس" className="flex items-center justify-center p-2.5 sm:p-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
                     <Edit3 className="h-4 w-4" />
                   </button>
-                  <button onClick={() => { setAddingLessonTo(addingLessonTo === course.id ? null : course.id); setEditingLessonId(null); setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, questions: [] }); }} className="flex-1 sm:flex-none justify-center flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 sm:py-2 text-sm font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400">
+                  <button onClick={() => { setAddingLessonTo(addingLessonTo === course.id ? null : course.id); setEditingLessonId(null); setNewLesson({ title: '', videoUrl: '', type: 'video', passingScore: 50, timeLimit: 0, allowRetake: true, questions: [] }); }} className="flex-1 sm:flex-none justify-center flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 sm:py-2 text-sm font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400">
                     <PlusCircle className="h-4 w-4" /> إضافة محتوى
                   </button>
                   <button onClick={() => { if (window.confirm('متأكد من حذف الكورس نهائياً بكل محتوياته؟')) deleteCourse(course.id); }} className="flex items-center justify-center p-2.5 sm:p-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
@@ -439,7 +437,6 @@ function CoursesTab() {
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-ink-600 dark:text-ink-300">عنوان المحتوى</label>
-                        {/* 🔴 إضافة dir="auto" لعنوان الدرس */}
                         <input required type="text" dir="auto" className="input-field w-full py-2.5 text-start" value={newLesson.title} onChange={e => setNewLesson({ ...newLesson, title: e.target.value })} />
                       </div>
 
@@ -466,6 +463,20 @@ function CoursesTab() {
                     </div>
 
                     {newLesson.type === 'quiz' && (
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1.5 rounded-xl border-2 border-blue-500 bg-blue-50 p-3 shadow-sm dark:border-blue-500/50 dark:bg-blue-900/20">
+                          <label className="flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-300"><Clock className="h-4 w-4" /> مدة الامتحان (بالدقائق)</label>
+                          <input type="number" min="0" placeholder="0 = بدون تايمر" className="input-field w-full border-none bg-transparent font-black text-blue-700 focus:ring-0 dark:text-blue-300 py-1" value={newLesson.timeLimit || ''} onChange={e => setNewLesson({ ...newLesson, timeLimit: Number(e.target.value) })} />
+                        </div>
+
+                        <div className="space-y-1.5 rounded-xl border-2 border-purple-500 bg-purple-50 p-3 shadow-sm dark:border-purple-500/50 dark:bg-purple-900/20 flex items-center justify-between">
+                          <label className="flex items-center gap-1 text-xs font-bold text-purple-700 dark:text-purple-300"><RotateCcw className="h-4 w-4" /> إمكانية إعادة الاختبار</label>
+                          <input type="checkbox" className="h-5 w-5 accent-purple-600 rounded cursor-pointer" checked={newLesson.allowRetake} onChange={e => setNewLesson({ ...newLesson, allowRetake: e.target.checked })} />
+                        </div>
+                      </div>
+                    )}
+
+                    {newLesson.type === 'quiz' && (
                       <div className="mt-6 border-t border-brand-200/50 pt-6 dark:border-brand-900/50">
                         <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                           <h5 className="font-bold text-ink-900 dark:text-white flex items-center gap-2"><Brain className="h-5 w-5 text-brand-600" /> أسئلة الاختبار</h5>
@@ -482,7 +493,6 @@ function CoursesTab() {
 
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="md:col-span-2">
-                                  {/* 🔴 إضافة dir="auto" لنص السؤال */}
                                   <input required type="text" dir="auto" placeholder="اكتب نص السؤال..." className="input-field w-full font-bold py-3 text-start" value={q.text} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].text = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
                                 </div>
                                 <div className="md:col-span-2">
@@ -504,7 +514,6 @@ function CoursesTab() {
                                   {q.options.map((opt, optIdx) => (
                                     <div key={optIdx} className={`flex items-center gap-3 rounded-xl border p-2 pl-3 ${q.correctOptionIndex === optIdx ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-900/20' : 'border-ink-100 dark:border-white/5'}`}>
                                       <input type="radio" name={`correct-${qIdx}`} className="h-5 w-5 accent-emerald-600 shrink-0" checked={q.correctOptionIndex === optIdx} onChange={() => { const qs = [...newLesson.questions]; qs[qIdx].correctOptionIndex = optIdx; setNewLesson({ ...newLesson, questions: qs }); }} />
-                                      {/* 🔴 إضافة dir="auto" للاختيارات */}
                                       <input required type="text" dir="auto" placeholder={`الاختيار ${optIdx + 1}`} className="flex-1 w-full bg-transparent text-sm font-bold outline-none dark:text-white text-start" value={opt} onChange={e => { const qs = [...newLesson.questions]; qs[qIdx].options[optIdx] = e.target.value; setNewLesson({ ...newLesson, questions: qs }); }} />
                                     </div>
                                   ))}
@@ -705,7 +714,238 @@ function StudentsTab() {
 }
 
 // ==========================================
-// 5. Announcements
+// 5. 🔴 كشف الدرجات (Grades Sheet Tab) 🔴
+// ==========================================
+function GradesTab() {
+  const { users, courses, progress } = useApp();
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('all');
+  const [selectedQuizId, setSelectedQuizId] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const students = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
+
+  // استخراج جميع الامتحانات المتاحة
+  const allQuizzes = useMemo(() => {
+    const list: { id: string; title: string; courseId: string; courseTitle: string; passingScore: number }[] = [];
+    courses.forEach(c => {
+      (c.lessons || []).forEach(l => {
+        if (l.type === 'quiz') {
+          list.push({
+            id: l.id,
+            title: l.title,
+            courseId: c.id,
+            courseTitle: c.title,
+            passingScore: l.passingScore || 50
+          });
+        }
+      });
+    });
+    return list;
+  }, [courses]);
+
+  // تجميع سجلات الامتحانات لكل الطلاب
+  const gradesList = useMemo(() => {
+    const list: {
+      studentId: string;
+      studentName: string;
+      studentPhone: string;
+      courseTitle: string;
+      quizTitle: string;
+      courseId: string;
+      quizId: string;
+      score: number;
+      passingScore: number;
+      passed: boolean;
+      updatedAt: string;
+    }[] = [];
+
+    progress.forEach(p => {
+      if (!p.completed) return;
+
+      const quiz = allQuizzes.find(q => q.id === p.lessonId);
+      if (!quiz) return; // ليس اختباراً
+
+      const student = students.find(s => s.id === p.userId || s.id === (p as any).studentId);
+
+      const scoreVal = p.score ?? 100;
+      const isPassed = scoreVal >= quiz.passingScore;
+
+      list.push({
+        studentId: student?.id || p.userId,
+        studentName: student?.name || 'طالب غير معروف',
+        studentPhone: student?.phone || 'غير مسجل',
+        courseTitle: quiz.courseTitle,
+        quizTitle: quiz.title,
+        courseId: quiz.courseId,
+        quizId: quiz.id,
+        score: scoreVal,
+        passingScore: quiz.passingScore,
+        passed: isPassed,
+        updatedAt: (p as any).updatedAt || (p as any).createdAt || new Date().toISOString()
+      });
+    });
+
+    return list.reverse();
+  }, [progress, allQuizzes, students]);
+
+  // الفلترة الحالية
+  const filteredGrades = useMemo(() => {
+    return gradesList.filter(item => {
+      const matchCourse = selectedCourseId === 'all' || item.courseId === selectedCourseId;
+      const matchQuiz = selectedQuizId === 'all' || item.quizId === selectedQuizId;
+      const matchSearch = item.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || item.studentPhone.includes(searchQuery);
+      return matchCourse && matchQuiz && matchSearch;
+    });
+  }, [gradesList, selectedCourseId, selectedQuizId, searchQuery]);
+
+  // تصدير كشف الدرجات لـ Excel
+  const handleExportExcel = () => {
+    if (filteredGrades.length === 0) {
+      alert("لا توجد درجات لتصديرها!");
+      return;
+    }
+
+    const dataToExport = filteredGrades.map(item => ({
+      "اسم الطالب": item.studentName,
+      "رقم الموبايل": item.studentPhone,
+      "الكورس": item.courseTitle,
+      "الاختبار": item.quizTitle,
+      "الدرجة (%)": `${item.score}%`,
+      "درجة النجاح (%)": `${item.passingScore}%`,
+      "حالة الاجتياز": item.passed ? 'ناجح' : 'راسب',
+      "التاريخ": new Date(item.updatedAt).toLocaleDateString('ar-EG')
+    }));
+
+    const headers = Object.keys(dataToExport[0]).join(',');
+    const rows = dataToExport.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const csvContent = "\uFEFF" + headers + '\n' + rows;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `كشف_درجات_الطلاب_${new Date().toLocaleDateString('ar-EG')}.csv`;
+    link.click();
+  };
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl sm:text-2xl font-black text-ink-900 dark:text-white flex items-center gap-2">
+          <Award className="h-7 w-7 text-brand-600" /> كشف درجات امتحانات المنصة
+        </h2>
+
+        <button onClick={handleExportExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto rounded-xl bg-emerald-600 px-5 py-3 sm:py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 transition-colors">
+          <Download className="h-4 w-4" /> تصدير كشف الدرجات لـ Excel
+        </button>
+      </div>
+
+      {/* الفلاتر */}
+      <div className="grid gap-4 sm:grid-cols-3 rounded-[2rem] border border-ink-200 bg-white/70 p-5 shadow-sm dark:border-white/10 dark:bg-white/5">
+        <div>
+          <label className="mb-1.5 block text-xs font-bold text-ink-600 dark:text-ink-300">فلترة بالكورس</label>
+          <select
+            className="input-field w-full py-2.5 text-sm"
+            value={selectedCourseId}
+            onChange={(e) => {
+              setSelectedCourseId(e.target.value);
+              setSelectedQuizId('all');
+            }}
+          >
+            <option value="all">جميع الكورسات</option>
+            {courses.map(c => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-bold text-ink-600 dark:text-ink-300">فلترة بالامتحان</label>
+          <select
+            className="input-field w-full py-2.5 text-sm"
+            value={selectedQuizId}
+            onChange={(e) => setSelectedQuizId(e.target.value)}
+          >
+            <option value="all">جميع الامتحانات</option>
+            {allQuizzes
+              .filter(q => selectedCourseId === 'all' || q.courseId === selectedCourseId)
+              .map(q => (
+                <option key={q.id} value={q.id}>{q.title} ({q.courseTitle})</option>
+              ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-bold text-ink-600 dark:text-ink-300">بحث باسم الطالب أو رقم الهاتف</label>
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+            <input
+              type="text"
+              placeholder="ابحث..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="input-field w-full pr-9 py-2.5 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* جدول كشف الدرجات */}
+      <div className="overflow-hidden rounded-3xl sm:rounded-[2rem] border border-ink-200 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <table className="w-full min-w-[700px] text-right text-sm">
+            <thead className="border-b border-ink-200 bg-ink-50/50 dark:border-white/10 dark:bg-white/5">
+              <tr>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الطالب</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الموبايل</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الكورس</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الاختبار</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الدرجة الحاصل عليها</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">الحالة</th>
+                <th className="p-4 font-bold text-ink-600 dark:text-ink-300">التاريخ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredGrades.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center font-bold text-ink-400">
+                    لا توجد درجات مسجلة تطابق اختياراتك.
+                  </td>
+                </tr>
+              ) : (
+                filteredGrades.map((row, idx) => (
+                  <tr key={idx} className="border-b border-ink-100 last:border-0 dark:border-white/5 hover:bg-ink-50/50 dark:hover:bg-white/5 transition-colors">
+                    <td className="p-4 font-bold text-ink-900 dark:text-white">{row.studentName}</td>
+                    <td className="p-4 font-mono font-bold text-ink-600 dark:text-ink-400" dir="ltr">{row.studentPhone}</td>
+                    <td className="p-4 font-bold text-brand-600 dark:text-brand-400 truncate max-w-[150px]">{row.courseTitle}</td>
+                    <td className="p-4 font-bold text-ink-800 dark:text-ink-200 truncate max-w-[150px]">{row.quizTitle}</td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1 rounded-lg px-3 py-1 font-black ${row.passed ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                        {row.score}%
+                      </span>
+                    </td>
+                    <td className="p-4 font-bold">
+                      {row.passed ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> ناجح</span>
+                      ) : (
+                        <span className="text-red-600 dark:text-red-400 flex items-center gap-1"><XCircle className="h-4 w-4" /> راسب</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-xs font-bold text-ink-500 dark:text-ink-400">
+                      {new Date(row.updatedAt).toLocaleDateString('ar-EG')}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 6. Announcements
 // ==========================================
 function AnnouncementsTab() {
   const { announcements, addAnnouncement, toggleAnnouncement, deleteAnnouncement } = useApp();
@@ -741,7 +981,7 @@ function AnnouncementsTab() {
 // ==========================================
 export function AdminDashboard() {
   const { user, enrollments } = useApp();
-  const [activeTab, setActiveTab] = useState<'overview' | 'enrollments' | 'courses' | 'students' | 'announcements'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'enrollments' | 'courses' | 'students' | 'grades' | 'announcements'>('overview');
 
   if (user?.role !== 'admin') {
     return <div className="flex min-h-screen items-center justify-center font-bold text-red-500">غير مصرح لك بالدخول</div>;
@@ -770,6 +1010,7 @@ export function AdminDashboard() {
                 { id: 'enrollments', icon: Receipt, label: 'الطلبات', badge: pendingCount },
                 { id: 'courses', icon: BookOpen, label: 'الكورسات' },
                 { id: 'students', icon: Users, label: 'الطلاب' },
+                { id: 'grades', icon: Award, label: 'كشف الدرجات' },
                 { id: 'announcements', icon: Bell, label: 'الإشعارات' },
               ].map((tab) => (
                 <button
@@ -798,6 +1039,7 @@ export function AdminDashboard() {
           {activeTab === 'enrollments' && <EnrollmentsTab />}
           {activeTab === 'courses' && <CoursesTab />}
           {activeTab === 'students' && <StudentsTab />}
+          {activeTab === 'grades' && <GradesTab />}
           {activeTab === 'announcements' && <AnnouncementsTab />}
         </div>
       </div>

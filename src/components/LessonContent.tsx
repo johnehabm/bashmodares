@@ -1,9 +1,8 @@
-import { useState, useMemo } from 'react';
-import { CheckCircle2, RotateCcw, Award, ChevronLeft, ChevronRight, Layers, Brain } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { CheckCircle2, RotateCcw, Award, ChevronLeft, ChevronRight, Layers, Brain, Clock, AlertTriangle } from 'lucide-react';
 import type { Lesson } from '../types';
 import { useApp } from '../store/AppContext';
 
-// دالة لاستخراج الـ ID من أي رابط يوتيوب وتحويله لـ Embed أوتوماتيك
 const getEmbedUrl = (url?: string) => {
   if (!url) return '';
   let videoId = url;
@@ -118,11 +117,19 @@ export function PdfLesson({ lesson }: { lesson: Lesson }) {
 }
 
 export function QuizLesson({ lesson }: { lesson: Lesson }) {
-  const { markLessonComplete, isLessonComplete } = useApp();
+  const { markLessonComplete, isLessonComplete, progress, user } = useApp();
   const done = isLessonComplete(lesson.id);
   const [mode, setMode] = useState<'quiz' | 'flashcards'>('quiz');
 
-  // معقم البيانات (Sanitizer)
+  // التحقق مما إذا كان الطالب قدم المحاولة سابقاً
+  const studentProgress = useMemo(() => {
+    return progress.find(p => p.lessonId === lesson.id && (p.userId === user?.id || (p as any).studentId === user?.id));
+  }, [progress, lesson.id, user]);
+
+  const allowRetake = (lesson as any).allowRetake !== false; // القيمة الافتراضية مسموح للإعادة
+  const timeLimitInMinutes = (lesson as any).timeLimit || 0; // بالدقائق
+
+  // معقم البيانات
   const questions = useMemo(() => {
     return (lesson.questions || []).map((q: any, idx: number) => {
       const normalizedOptions = (q.options || []).map((opt: any) => {
@@ -151,6 +158,46 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showResult, setShowResult] = useState(false);
 
+  // منطق التايمر (Timer)
+  const [timeLeft, setTimeLeft] = useState<number>(timeLimitInMinutes * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  useEffect(() => {
+    if (timeLimitInMinutes > 0 && mode === 'quiz' && !showResult && !done) {
+      setTimeLeft(timeLimitInMinutes * 60);
+      setIsTimerRunning(true);
+    } else {
+      setIsTimerRunning(false);
+    }
+  }, [timeLimitInMinutes, mode, showResult, done]);
+
+  useEffect(() => {
+    if (!isTimerRunning || timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setIsTimerRunning(false);
+          // انتهاء الوقت وتسليم الإجابات أوتوماتيكياً
+          alert('انتهى وقت الاختبار! تم تسليم إجاباتك تلقائياً.');
+          setShowResult(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isTimerRunning, timeLeft]);
+
+  // تحويل الثواني إلى mm:ss
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const cards = (lesson as any).flashcards ?? [];
   const [cardIdx, setCardIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -174,7 +221,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   const passed = scorePercent >= passingScore;
 
   const handleAnswer = (optionIdx: number) => {
-    // تمكين الطالب من تغيير إجابته قبل الانتقال للسؤال التالي
     setAnswers((prev) => ({ ...prev, [q.qId]: optionIdx }));
   };
 
@@ -183,6 +229,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
       setCurrent((c) => c + 1);
     } else {
       setShowResult(true);
+      setIsTimerRunning(false);
       if (passed) {
         markLessonComplete(lesson.id, lesson.courseId, scorePercent);
       }
@@ -190,9 +237,17 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
   };
 
   const restart = () => {
+    if (!allowRetake && (done || studentProgress)) {
+      alert('غير مسموح بإعادة هذا الاختبار بناءً على تعليمات المعلم.');
+      return;
+    }
     setCurrent(0);
     setAnswers({});
     setShowResult(false);
+    if (timeLimitInMinutes > 0) {
+      setTimeLeft(timeLimitInMinutes * 60);
+      setIsTimerRunning(true);
+    }
   };
 
   const nextCard = () => {
@@ -204,35 +259,66 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
     setCardIdx((i) => (i - 1 + cards.length) % cards.length);
   };
 
+  // 🔴 منع الطالب من أداء الامتحان لو المدرس قافل الإعادة وقدمه قبل كده
+  if (!allowRetake && (done || studentProgress) && !showResult) {
+    const prevScore = studentProgress?.score ?? (done ? 100 : 0);
+    return (
+      <div className="flex flex-col items-center justify-center rounded-[2rem] border border-amber-200 bg-amber-50/50 p-8 text-center shadow-sm dark:border-amber-900/50 dark:bg-amber-900/10">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h3 className="text-2xl font-black text-amber-900 dark:text-amber-200">
+          تم أداء الاختبار سابقاً
+        </h3>
+        <p className="mt-2 max-w-md text-sm font-bold text-amber-700 dark:text-amber-400">
+          هذا الاختبار متاح للمحاولة مرة واحدة فقط بحسب تعليمات المعلم، وقد قمت بأدائه مسبقاً.
+        </p>
+        <div className="mt-6 rounded-xl bg-white px-6 py-3 font-black text-amber-900 shadow-sm dark:bg-ink-900 dark:text-amber-200">
+          درجتك السابقة: {prevScore}%
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Mode toggle */}
-      <div className="flex gap-2">
-        {questions.length > 0 && cards.length > 0 && (
-          <>
-            <button
-              onClick={() => setMode('quiz')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'quiz'
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
-                }`}
-            >
-              <Brain className="h-4 w-4" /> اختبار
-            </button>
-            <button
-              onClick={() => setMode('flashcards')}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'flashcards'
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
-                }`}
-            >
-              <Layers className="h-4 w-4" /> بطاقات مراجعة
-            </button>
-          </>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-2">
+          {questions.length > 0 && cards.length > 0 && (
+            <>
+              <button
+                onClick={() => setMode('quiz')}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'quiz'
+                  ? 'bg-brand-600 text-white shadow-md'
+                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
+                  }`}
+              >
+                <Brain className="h-4 w-4" /> اختبار
+              </button>
+              <button
+                onClick={() => setMode('flashcards')}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${mode === 'flashcards'
+                  ? 'bg-brand-600 text-white shadow-md'
+                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-900/50 dark:text-ink-300'
+                  }`}
+              >
+                <Layers className="h-4 w-4" /> بطاقات مراجعة
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* 🔴 عرض التايمر التنازلي للمشاهدة */}
+        {mode === 'quiz' && timeLimitInMinutes > 0 && !showResult && (
+          <div className={`flex items-center gap-2 rounded-xl border px-4 py-2 font-mono text-base font-black transition-colors ${timeLeft < 60 ? 'animate-pulse border-red-500 bg-red-50 text-red-600 dark:bg-red-900/30' : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400'}`}>
+            <Clock className="h-5 w-5" />
+            <span>{formatTime(timeLeft)}</span>
+          </div>
         )}
       </div>
 
-      {/* Quiz Mode - شاشة الاختبار بدون عرض الصح والغلط */}
+      {/* Quiz Mode */}
       {mode === 'quiz' && questions.length > 0 && q && !showResult && (
         <div className="rounded-[2rem] border border-ink-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171a36] sm:p-8">
           <div className="mb-4 flex items-center justify-between">
@@ -270,7 +356,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
           <div className="mt-8 space-y-3">
             {q.options.map((optText: string, optIdx: number) => {
               const isSelected = answers[q.qId] === optIdx;
-              const letters = ['A', 'B', 'C', 'D']; // 🔴 الحروف الإنجليزية
+              const letters = ['A', 'B', 'C', 'D'];
 
               const cls = isSelected
                 ? 'border-brand-500 bg-brand-50 dark:border-brand-500/50 dark:bg-brand-900/20'
@@ -301,7 +387,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
         </div>
       )}
 
-      {/* Result Mode - شاشة النتيجة ومراجعة الإجابات */}
+      {/* Result Mode */}
       {mode === 'quiz' && showResult && (
         <div className="flex flex-col items-center justify-center rounded-[2rem] border border-ink-200 bg-white p-6 sm:p-10 text-center shadow-sm dark:border-white/10 dark:bg-[#171a36] animate-in zoom-in duration-500">
           <div
@@ -331,7 +417,7 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             </div>
           </div>
 
-          {/* 🔴 قسم مراجعة الإجابات الجديد */}
+          {/* مراجعة الإجابات */}
           <div className="mt-10 w-full border-t border-ink-200 pt-8 dark:border-white/10">
             <h4 className="mb-6 text-xl font-black text-ink-900 dark:text-white text-start">مراجعة الإجابات</h4>
             <div className="space-y-6">
@@ -376,16 +462,12 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
             </div>
           </div>
 
-          {passed && !done && (
-            <p className="mt-8 text-sm font-bold text-emerald-600 dark:text-emerald-400">
-              تم تسجيل إكمالك للدرس بنجاح، يمكنك الانتقال للدرس التالي.
-            </p>
+          {allowRetake && (
+            <button onClick={restart} className="btn-primary mt-6 py-3 px-8">
+              <RotateCcw className="mr-2 h-5 w-5" />
+              إعادة الاختبار
+            </button>
           )}
-
-          <button onClick={restart} className="btn-primary mt-6 py-3 px-8">
-            <RotateCcw className="mr-2 h-5 w-5" />
-            إعادة الاختبار
-          </button>
         </div>
       )}
 
@@ -444,18 +526,6 @@ export function QuizLesson({ lesson }: { lesson: Lesson }) {
               <ChevronLeft className="h-5 w-5" />
             </button>
           </div>
-
-          {!done && (
-            <div className="mt-8 flex justify-center border-t border-ink-200 pt-6 dark:border-white/10">
-              <button
-                onClick={() => markLessonComplete(lesson.id, lesson.courseId)}
-                className="btn-primary py-3 px-8"
-              >
-                <CheckCircle2 className="h-5 w-5" />
-                تأكيد إكمال المراجعة
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
